@@ -33,6 +33,8 @@
 #include <sys/utsname.h>
 #endif
 
+#include <alloca.h>  // Motorola, a5705c, 01/19/2015, IKVPREL1L-7633
+
 #include "arch/instruction_set_features.h"
 #include "arch/mips/instruction_set_features_mips.h"
 #include "art_method-inl.h"
@@ -543,6 +545,18 @@ class Dex2Oat FINAL {
       timings_(timings),
       force_determinism_(false)
       {}
+
+  // BEGIN Motorola, a5705c, 01/19/2015, IKVPREL1L-7633
+  static int grow_stack() {
+    const size_t size = 1024 * 1024;
+    char* buf = reinterpret_cast<char*>(alloca(size));
+    if (buf) {
+      memset(buf, 0, size);
+      return 1;
+    }
+    return 0;
+  }
+  // END IKVPREL1L-7633
 
   ~Dex2Oat() {
     // Log completion time before deleting the runtime_, because this accesses
@@ -2638,6 +2652,7 @@ static int CompileApp(Dex2Oat& dex2oat) {
 static int dex2oat(int argc, char** argv) {
   b13564922();
 
+  Dex2Oat::grow_stack();  // Motorola, a5705c, 01/19/2015, IKVPREL1L-7633
   TimingLogger timings("compiler", false, false);
 
   // Allocate `dex2oat` on the heap instead of on the stack, as Clang
