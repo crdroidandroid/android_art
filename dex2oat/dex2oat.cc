@@ -39,6 +39,18 @@
 #include "arch/mips/instruction_set_features_mips.h"
 #include "art_method-inl.h"
 #include "base/dumpable.h"
+
+// BEGIN Motorola, a5705c, 03/09/2015, IKDLUPGRD-2361
+#ifdef __ANDROID__
+#include <sys/file.h>
+#include <sys/stat.h>
+
+#include "base/logging.h"
+#include "base/stringprintf.h"
+#include "base/unix_file/fd_file.h"
+#endif /* __ANDROID__ */
+// END IKDLUPGRD-2361
+
 #include "base/macros.h"
 #include "base/scoped_flock.h"
 #include "base/stl_util.h"
@@ -496,6 +508,62 @@ class WatchDog {
   pthread_t pthread_;
 };
 
+// BEGIN Motorola, a5705c, 03/09/2015, IKDLUPGRD-2361
+#ifdef __ANDROID__
+// A copy of ScopedFlock with minor changes (i.e., open the file with readonly)
+class MyScopedFlock {
+ public:
+  MyScopedFlock() {}
+
+  // Attempts to acquire an exclusive file lock (see flock(2)) on the file
+  // at filename, and blocks until it can do so if flag "block" is true.
+  bool Init(const char* filename, std::string* error_msg, bool block) {
+    while (true) {
+      file_.reset(OS::OpenFileWithFlags(filename, O_RDONLY));
+      if (file_.get() == nullptr) {
+        *error_msg = StringPrintf("Failed to open file '%s': %s", filename, strerror(errno));
+        return false;
+      }
+      int flock_result = TEMP_FAILURE_RETRY(flock(file_->Fd(), block?LOCK_EX:(LOCK_EX|LOCK_NB)));
+      if (flock_result != 0) {
+        *error_msg = StringPrintf("Failed to lock file '%s': %s", filename, strerror(errno));
+        return false;
+      }
+      struct stat fstat_stat;
+      int fstat_result = TEMP_FAILURE_RETRY(fstat(file_->Fd(), &fstat_stat));
+      if (fstat_result != 0) {
+        *error_msg = StringPrintf("Failed to fstat file '%s': %s", filename, strerror(errno));
+        return false;
+      }
+      struct stat stat_stat;
+      int stat_result = TEMP_FAILURE_RETRY(stat(filename, &stat_stat));
+      if (stat_result != 0) {
+        PLOG(WARNING) << "Failed to stat, will retry: " << filename;
+        // ENOENT can happen if someone racing with us unlinks the file we created so just retry.
+        continue;
+      }
+      if (fstat_stat.st_dev != stat_stat.st_dev || fstat_stat.st_ino != stat_stat.st_ino) {
+        LOG(WARNING) << "File changed while locking, will retry: " << filename;
+        continue;
+      }
+      return true;
+    }
+  }
+
+  ~MyScopedFlock() {
+    if (file_.get() != nullptr) {
+      int flock_result = TEMP_FAILURE_RETRY(flock(file_->Fd(), LOCK_UN));
+      CHECK_EQ(0, flock_result);
+    }
+  }
+
+ private:
+  std::unique_ptr<File> file_;
+  DISALLOW_COPY_AND_ASSIGN(MyScopedFlock);
+};
+#endif /* __ANDROID__ */
+// END IKDLUPGRD-2361
+
 class Dex2Oat FINAL {
  public:
   explicit Dex2Oat(TimingLogger* timings) :
@@ -582,6 +650,50 @@ class Dex2Oat FINAL {
       key_value_store_.release();
     }
   }
+
+  // BEGIN Motorola, a5705c, 03/30/2015, IKSWL-5293
+#ifdef __ANDROID__
+  static void lockOrWaitIfNecessary(MyScopedFlock& dex2oat_flock) {
+    const uint64_t kWaitDex2oatWarningDuration = 5000;  // 5 seconds;
+    const char* kDex2oatLockFileName = "/system/framework/boot.oat";
+    if (!OS::FileExists(kDex2oatLockFileName)) {
+      return;
+    }
+    std::string dalvik_cache;
+    bool have_android_data, dalvik_cache_exists, is_global_cache;
+    GetDalvikCache(GetInstructionSetString(kRuntimeISA), false,
+      &dalvik_cache, &have_android_data, &dalvik_cache_exists, &is_global_cache);
+    if (!dalvik_cache_exists) {
+      return;
+    }
+    std::string lock_file;
+    std::string err_msg;
+    if (!GetDalvikCacheFilename(kDex2oatLockFileName, dalvik_cache.c_str(),
+      &lock_file, &err_msg)) {
+      return;
+    }
+
+    // Firstly attempt to lock once, and print message if someone else holds it.
+    {
+      MyScopedFlock tmp_flock;
+      if (!tmp_flock.Init(lock_file.c_str(), &err_msg, false)) {
+        LOG(INFO) << "Entering dex2oat contention";
+      }
+    }
+
+    // Formally acquire this lock
+    uint64_t wait_start_ms = MilliTime();
+    if (!dex2oat_flock.Init(lock_file.c_str(), &err_msg, true)) {
+      LOG(WARNING) << err_msg;
+    } else {
+      uint64_t elapsed_time = MilliTime() - wait_start_ms;
+      if (elapsed_time > kWaitDex2oatWarningDuration) {
+        LOG(INFO) << "Exiting dex2oat contention, waited " << PrettyDuration(MsToNs(elapsed_time));
+      }
+    }
+  }
+#endif /* __ANDROID__ */
+  // END IKSWL-5293
 
   struct ParserOptions {
     std::vector<const char*> oat_symbols;
@@ -895,6 +1007,15 @@ class Dex2Oat FINAL {
         multi_image_ = true;
       }
     }
+
+    // BEGIN Motorola, a5705c, 03/09/2015, IKDLUPGRD-2361
+#ifdef __ANDROID__
+    MyScopedFlock dex2oat_flock;
+    // BEGIN Motorola, a5705c, 03/30/2015, IKSWL-5293
+    lockOrWaitIfNecessary(dex2oat_flock);
+    // END IKSWL-5293
+#endif /* __ANDROID__ */
+    // END IKDLUPGRD-2361
 
     // Done with usage checks, enable watchdog if requested
     if (parser_options->watch_dog_enabled) {
