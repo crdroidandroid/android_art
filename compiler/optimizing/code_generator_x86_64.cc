@@ -3897,7 +3897,7 @@ void InstructionCodeGeneratorX86_64::VisitUShr(HUShr* ushr) {
 
 void LocationsBuilderX86_64::VisitNewInstance(HNewInstance* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnMainOnly);
   InvokeRuntimeCallingConvention calling_convention;
   if (instruction->IsStringAlloc()) {
     locations->AddTemp(Location::RegisterLocation(kMethodRegisterArgument));
@@ -3930,7 +3930,7 @@ void InstructionCodeGeneratorX86_64::VisitNewInstance(HNewInstance* instruction)
 
 void LocationsBuilderX86_64::VisitNewArray(HNewArray* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnMainOnly);
   InvokeRuntimeCallingConvention calling_convention;
   locations->AddTemp(Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
   locations->SetOut(Location::RegisterLocation(RAX));
@@ -5543,7 +5543,7 @@ void InstructionCodeGeneratorX86_64::VisitClearException(HClearException* clear 
 
 void LocationsBuilderX86_64::VisitThrow(HThrow* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnMainOnly);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
 }
@@ -6053,7 +6053,7 @@ void InstructionCodeGeneratorX86_64::VisitCheckCast(HCheckCast* instruction) {
 
 void LocationsBuilderX86_64::VisitMonitorOperation(HMonitorOperation* instruction) {
   LocationSummary* locations =
-      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCall);
+      new (GetGraph()->GetArena()) LocationSummary(instruction, LocationSummary::kCallOnMainOnly);
   InvokeRuntimeCallingConvention calling_convention;
   locations->SetInAt(0, Location::RegisterLocation(calling_convention.GetRegisterAt(0)));
 }
