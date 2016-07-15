@@ -1178,9 +1178,6 @@ public class Main {
   /// CHECK: Deoptimize
   /// CHECK: Deoptimize
   /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
   /// CHECK-NOT: Deoptimize
   /// CHECK: Goto
   /// CHECK: Goto
@@ -1191,7 +1188,7 @@ public class Main {
     for (int i = array.length - 1 ; i >= 0; i--) {
       array[i] = 1;
     }
-    // Several HDeoptimize will be added. Two for each index.
+    // Three HDeoptimize will be added for the bounds.
     // The null check is not necessary.
     for (int i = end - 2 ; i > 0; i--) {
       if (expectInterpreter) {
@@ -1240,20 +1237,12 @@ public class Main {
   /// CHECK: Deoptimize
   /// CHECK: Deoptimize
   /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
-  /// CHECK: Deoptimize
   /// CHECK-NOT: Deoptimize
   /// CHECK: Goto
   /// CHECK: Goto
   /// CHECK: Goto
 
   void foo6(int[] array, int start, int end, boolean expectInterpreter) {
-    // Several HDeoptimize will be added.
     for (int i = end; i >= start; i--) {
       if (expectInterpreter) {
         assertIsInterpreted();
@@ -1372,8 +1361,8 @@ public class Main {
   /// CHECK-NOT: Deoptimize
 
   void foo9(int[] array, boolean expectInterpreter) {
-    // Two HDeoptimize will be added. Two for the index
-    // and one for null check on array.
+    // Three HDeoptimize will be added. Two for the index and one for null check on array. Then
+    // simplification removes one redundant HDeoptimize.
     for (int i = 0 ; i < 10; i++) {
       if (expectInterpreter) {
         assertIsInterpreted();
