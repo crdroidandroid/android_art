@@ -28,8 +28,8 @@
 namespace art {
 
 // Cast entrypoints.
-extern "C" uint32_t art_quick_assignable_from_code(const mirror::Class* klass,
-                                                   const mirror::Class* ref_class);
+extern "C" size_t art_quick_assignable_from_code(const mirror::Class* klass,
+                                                 const mirror::Class* ref_class);
 
 // Read barrier entrypoints.
 extern "C" mirror::Object* art_quick_read_barrier_mark(mirror::Object*);
