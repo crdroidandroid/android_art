@@ -166,7 +166,6 @@ ART_C_INCLUDES += bionic/libc/private
 # Base set of cflags used by all things ART.
 art_cflags := \
   -fno-rtti \
-  -std=gnu++11 \
   -g0 \
   -fstrict-aliasing \
   -fvisibility=protected \
