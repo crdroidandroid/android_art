@@ -66,12 +66,6 @@ DEX2OAT_STATIC_DEPENDENCIES := \
   liblog \
   libz \
   libbacktrace \
-  libLLVMObject \
-  libLLVMBitReader \
-  libLLVMMC \
-  libLLVMMCParser \
-  libLLVMCore \
-  libLLVMSupport \
   libcutils \
   libunwindbacktrace \
   libutils \
