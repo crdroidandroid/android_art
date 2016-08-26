@@ -870,9 +870,13 @@ void Heap::IncrementDisableThreadFlip(Thread* self) {
   MutexLock mu(self, *thread_flip_lock_);
   bool has_waited = false;
   uint64_t wait_start = NanoTime();
-  while (thread_flip_running_) {
-    has_waited = true;
-    thread_flip_cond_->Wait(self);
+  if (thread_flip_running_) {
+    ATRACE_BEGIN("IncrementDisableThreadFlip");
+    while (thread_flip_running_) {
+      has_waited = true;
+      thread_flip_cond_->Wait(self);
+    }
+    ATRACE_END();
   }
   ++disable_thread_flip_count_;
   if (has_waited) {
