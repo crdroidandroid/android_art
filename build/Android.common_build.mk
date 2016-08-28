@@ -29,14 +29,14 @@ include art/build/Android.common_utils.mk
 #
 # Beware that tests may use the non-debug build for performance, notable 055-enum-performance
 #
-ART_BUILD_TARGET_NDEBUG ?= true
-ART_BUILD_TARGET_DEBUG ?= true
-ART_BUILD_HOST_NDEBUG ?= true
-ART_BUILD_HOST_DEBUG ?= true
+ART_BUILD_TARGET_NDEBUG := true
+ART_BUILD_TARGET_DEBUG := false
+ART_BUILD_HOST_NDEBUG := true
+ART_BUILD_HOST_DEBUG := false
 
 # Set this to change what opt level Art is built at.
-ART_DEBUG_OPT_FLAG ?= -O2
-ART_NDEBUG_OPT_FLAG ?= -O3
+ART_DEBUG_OPT_FLAG := -O3
+ART_NDEBUG_OPT_FLAG := -O3
 
 # Enable the static builds only for checkbuilds.
 ifneq (,$(filter checkbuild,$(MAKECMDGOALS)))
@@ -68,11 +68,6 @@ $(info Disabling ART_BUILD_HOST_DEBUG)
 endif
 ifeq ($(ART_BUILD_HOST_STATIC),true)
 $(info Enabling ART_BUILD_HOST_STATIC)
-endif
-
-ifeq ($(ART_TEST_DEBUG_GC),true)
-  ART_DEFAULT_GC_TYPE := SS
-  ART_USE_TLAB := true
 endif
 
 #
@@ -125,46 +120,6 @@ ART_TARGET_CLANG_CFLAGS_mips64 :=
 ART_TARGET_CLANG_CFLAGS_x86 :=
 ART_TARGET_CLANG_CFLAGS_x86_64 :=
 
-# Warn about thread safety violations with clang.
-art_clang_cflags := -Wthread-safety -Wthread-safety-negative
-
-# Warn if switch fallthroughs aren't annotated.
-art_clang_cflags += -Wimplicit-fallthrough
-
-# Enable float equality warnings.
-art_clang_cflags += -Wfloat-equal
-
-# Enable warning of converting ints to void*.
-art_clang_cflags += -Wint-to-void-pointer-cast
-
-# Enable warning of wrong unused annotations.
-art_clang_cflags += -Wused-but-marked-unused
-
-# Enable warning for deprecated language features.
-art_clang_cflags += -Wdeprecated
-
-# Enable warning for unreachable break & return.
-art_clang_cflags += -Wunreachable-code-break -Wunreachable-code-return
-
-# Enable missing-noreturn only on non-Mac. As lots of things are not implemented for Apple, it's
-# a pain.
-ifneq ($(HOST_OS),darwin)
-  art_clang_cflags += -Wmissing-noreturn
-endif
-
-
-# GCC-only warnings.
-art_gcc_cflags := -Wunused-but-set-parameter
-# Suggest const: too many false positives, but good for a trial run.
-#                  -Wsuggest-attribute=const
-# Useless casts: too many, as we need to be 32/64 agnostic, but the compiler knows.
-#                  -Wuseless-cast
-# Zero-as-null: Have to convert all NULL and "diagnostic ignore" all includes like libnativehelper
-# that are still stuck pre-C++11.
-#                  -Wzero-as-null-pointer-constant \
-# Suggest final: Have to move to a more recent GCC.
-#                  -Wsuggest-final-types
-
 ART_TARGET_CLANG_CFLAGS := $(art_clang_cflags)
 ifeq ($(ART_HOST_CLANG),true)
   # Bug: 15446488. We don't omit the frame pointer to work around
@@ -207,16 +162,8 @@ ART_C_INCLUDES += bionic/libc/private
 art_cflags := \
   -fno-rtti \
   -std=gnu++11 \
-  -ggdb3 \
-  -Wall \
-  -Werror \
-  -Wextra \
-  -Wstrict-aliasing \
+  -g0 \
   -fstrict-aliasing \
-  -Wunreachable-code \
-  -Wredundant-decls \
-  -Wshadow \
-  -Wunused \
   -fvisibility=protected \
   $(art_default_gc_type_cflags)
 
@@ -227,8 +174,7 @@ ART_HOST_CODEGEN_ARCHS ?= all
 
 ifeq ($(ART_TARGET_CODEGEN_ARCHS),all)
   ART_TARGET_CODEGEN_ARCHS := $(sort $(ART_TARGET_SUPPORTED_ARCH) $(ART_HOST_SUPPORTED_ARCH))
-  # We need to handle the fact that some compiler tests mix code from different architectures.
-  ART_TARGET_COMPILER_TESTS ?= true
+  ART_TARGET_COMPILER_TESTS := false
 else
   ART_TARGET_COMPILER_TESTS := false
   ifeq ($(ART_TARGET_CODEGEN_ARCHS),svelte)
@@ -237,7 +183,7 @@ else
 endif
 ifeq ($(ART_HOST_CODEGEN_ARCHS),all)
   ART_HOST_CODEGEN_ARCHS := $(sort $(ART_TARGET_SUPPORTED_ARCH) $(ART_HOST_SUPPORTED_ARCH))
-  ART_HOST_COMPILER_TESTS ?= true
+  ART_HOST_COMPILER_TESTS := false
 else
   ART_HOST_COMPILER_TESTS := false
   ifeq ($(ART_HOST_CODEGEN_ARCHS),svelte)
@@ -275,11 +221,6 @@ art_host_cflags := \
 
 # Base set of asflags used by all things ART.
 art_asflags :=
-
-# Missing declarations: too many at the moment, as we use "extern" quite a bit.
-#  -Wmissing-declarations \
-
-
 
 ifdef ART_IMT_SIZE
   art_cflags += -DIMT_SIZE=$(ART_IMT_SIZE)
@@ -357,8 +298,8 @@ ART_TARGET_ASFLAGS += $(art_asflags)
 
 ART_HOST_NON_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
 ART_TARGET_NON_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
-ART_HOST_DEBUG_CFLAGS := $(art_debug_cflags)
-ART_TARGET_DEBUG_CFLAGS := $(art_debug_cflags)
+ART_HOST_DEBUG_CFLAGS := $(art_host_non_debug_cflags)
+ART_TARGET_DEBUG_CFLAGS := $(art_target_non_debug_cflags)
 
 ifndef LIBART_IMG_HOST_MIN_BASE_ADDRESS_DELTA
   LIBART_IMG_HOST_MIN_BASE_ADDRESS_DELTA=-0x1000000
@@ -422,25 +363,9 @@ define set-target-local-cflags-vars
 endef
 
 # Support for disabling certain builds.
-ART_BUILD_TARGET := false
-ART_BUILD_HOST := false
-ART_BUILD_NDEBUG := false
+ART_BUILD_TARGET := true
+ART_BUILD_HOST := true
+ART_BUILD_NDEBUG := true
 ART_BUILD_DEBUG := false
-ifeq ($(ART_BUILD_TARGET_NDEBUG),true)
-  ART_BUILD_TARGET := true
-  ART_BUILD_NDEBUG := true
-endif
-ifeq ($(ART_BUILD_TARGET_DEBUG),true)
-  ART_BUILD_TARGET := true
-  ART_BUILD_DEBUG := true
-endif
-ifeq ($(ART_BUILD_HOST_NDEBUG),true)
-  ART_BUILD_HOST := true
-  ART_BUILD_NDEBUG := true
-endif
-ifeq ($(ART_BUILD_HOST_DEBUG),true)
-  ART_BUILD_HOST := true
-  ART_BUILD_DEBUG := true
-endif
 
 endif # ART_ANDROID_COMMON_BUILD_MK
