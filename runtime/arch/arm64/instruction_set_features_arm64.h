@@ -27,8 +27,21 @@ using Arm64FeaturesUniquePtr = std::unique_ptr<const Arm64InstructionSetFeatures
 // Instruction set features relevant to the ARM64 architecture.
 class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
  public:
+  enum Extension {
+    Invalid = -1,
+    ARMv80A = 0,
+    ARMv81A,
+    ARMv82A,
+    ARMv83A,
+  };
+
   // Process a CPU variant string like "krait" or "cortex-a15" and create InstructionSetFeatures.
   static Arm64FeaturesUniquePtr FromVariant(const std::string& variant, std::string* error_msg);
+
+  // Process a CPU variant and ISA extension, and create InstructionSetFeatures.
+  static Arm64FeaturesUniquePtr FromVariant(const std::string& variant,
+                                            const std::string& extension,
+                                            std::string* error_msg);
 
   // Parse a bitmap and create an InstructionSetFeatures.
   static Arm64FeaturesUniquePtr FromBitmap(uint32_t bitmap);
@@ -46,6 +59,19 @@ class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
   // Use assembly tests of the current runtime (ie kRuntimeISA) to determine the
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
   static Arm64FeaturesUniquePtr FromAssembly();
+
+  static Extension GetExtension(const std::string& str) {
+    if (str == "armv8.0-a") {
+      return ARMv80A;
+    } else if (str == "armv8.1-a") {
+      return ARMv81A;
+    } else if (str == "armv8.2-a") {
+      return ARMv82A;
+    } else if (str == "armv8.3-a") {
+      return ARMv83A;
+    }
+    return Invalid;
+  }
 
   bool Equals(const InstructionSetFeatures* other) const OVERRIDE;
 
@@ -68,6 +94,11 @@ class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
       return fix_cortex_a53_843419_;
   }
 
+  // Is the crc32 instruction feature enabled?
+  bool HasCRC32Instruction() const {
+      return has_crc32_;
+  }
+
   virtual ~Arm64InstructionSetFeatures() {}
 
  protected:
@@ -77,19 +108,22 @@ class Arm64InstructionSetFeatures FINAL : public InstructionSetFeatures {
                                  std::string* error_msg) const OVERRIDE;
 
  private:
-  Arm64InstructionSetFeatures(bool needs_a53_835769_fix, bool needs_a53_843419_fix)
+  Arm64InstructionSetFeatures(bool needs_a53_835769_fix, bool needs_a53_843419_fix, bool has_crc32)
       : InstructionSetFeatures(),
         fix_cortex_a53_835769_(needs_a53_835769_fix),
-        fix_cortex_a53_843419_(needs_a53_843419_fix) {
+        fix_cortex_a53_843419_(needs_a53_843419_fix),
+        has_crc32_(has_crc32) {
   }
 
   // Bitmap positions for encoding features as a bitmap.
   enum {
     kA53Bitfield = 1 << 0,
+    kCRC32Bitfield = 1 << 1,
   };
 
   const bool fix_cortex_a53_835769_;
   const bool fix_cortex_a53_843419_;
+  const bool has_crc32_;
 
   DISALLOW_COPY_AND_ASSIGN(Arm64InstructionSetFeatures);
 };
