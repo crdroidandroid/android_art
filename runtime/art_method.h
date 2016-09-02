@@ -26,7 +26,6 @@
 #include "modifiers.h"
 #include "mirror/object.h"
 #include "read_barrier_option.h"
-#include "stack.h"
 #include "utils.h"
 
 namespace art {
