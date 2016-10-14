@@ -874,7 +874,7 @@ void CodeGenerator::RecordCatchBlockInfo() {
     }
 
       if (current_phi == nullptr || current_phi->AsPhi()->GetRegNumber() != vreg) {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kNone, 0);
+        stack_map_stream_.NextDexRegisterEntry();
       } else {
         Location location = current_phi->GetLiveInterval()->ToLocation();
         switch (location.GetKind()) {
@@ -921,7 +921,7 @@ void CodeGenerator::EmitEnvironment(HEnvironment* environment, SlowPathCode* slo
   for (size_t i = 0, environment_size = environment->Size(); i < environment_size; ++i) {
     HInstruction* current = environment->GetInstructionAt(i);
     if (current == nullptr) {
-      stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kNone, 0);
+      stack_map_stream_.NextDexRegisterEntry();
       continue;
     }
 
@@ -1061,7 +1061,7 @@ void CodeGenerator::EmitEnvironment(HEnvironment* environment, SlowPathCode* slo
       }
 
       case Location::kInvalid: {
-        stack_map_stream_.AddDexRegisterEntry(DexRegisterLocation::Kind::kNone, 0);
+        stack_map_stream_.NextDexRegisterEntry();
         break;
       }
 
