@@ -44,7 +44,6 @@ Mutex* Locks::intern_table_lock_ = nullptr;
 Mutex* Locks::interpreter_string_init_map_lock_ = nullptr;
 Mutex* Locks::jni_libraries_lock_ = nullptr;
 Mutex* Locks::logging_lock_ = nullptr;
-Mutex* Locks::mem_maps_lock_ = nullptr;
 Mutex* Locks::modify_ldt_lock_ = nullptr;
 MutatorMutex* Locks::mutator_lock_ = nullptr;
 Mutex* Locks::profiler_lock_ = nullptr;
@@ -1084,10 +1083,6 @@ void Locks::Init() {
     UPDATE_CURRENT_LOCK_LEVEL(kUnexpectedSignalLock);
     DCHECK(unexpected_signal_lock_ == nullptr);
     unexpected_signal_lock_ = new Mutex("unexpected signal lock", current_lock_level, true);
-
-    UPDATE_CURRENT_LOCK_LEVEL(kMemMapsLock);
-    DCHECK(mem_maps_lock_ == nullptr);
-    mem_maps_lock_ = new Mutex("mem maps lock", current_lock_level);
 
     UPDATE_CURRENT_LOCK_LEVEL(kLoggingLock);
     DCHECK(logging_lock_ == nullptr);
