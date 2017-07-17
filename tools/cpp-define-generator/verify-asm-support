@@ -26,7 +26,7 @@
 ASM_SUPPORT_GEN_CHECKED_IN_COPY="runtime/generated/asm_support_gen.h"
 # Instead of producing an error if checked-in copy differs from the generated version,
 # overwrite the local checked-in copy instead.
-OVERWRITE_CHECKED_IN_COPY_IF_CHANGED="n"
+OVERWRITE_CHECKED_IN_COPY_IF_CHANGED="y"
 
 #######################
 #######################
