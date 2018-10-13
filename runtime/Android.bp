@@ -569,6 +569,7 @@ gensrcs {
 
 art_cc_library {
     name: "libart",
+    cflags: ["-O3"],
     defaults: [
         "libart_defaults",
         "libart_nativeunwind_defaults",
@@ -603,6 +604,7 @@ art_cc_library {
 
 art_cc_library {
     name: "libartd",
+    cflags: ["-O3"],
     defaults: [
         "art_debug_defaults",
         "libart_defaults",
@@ -646,6 +648,7 @@ art_cc_defaults {
 
 art_cc_library {
     name: "libart-runtime-gtest",
+    cflags: ["-O3"],
     defaults: [
         "libart-runtime-gtest-defaults",
         "libart-gtest-defaults",
@@ -798,6 +801,7 @@ art_cc_defaults {
 // TODO(b/192274705): Remove this module when the migration to standalone ART gtests is complete.
 art_cc_test {
     name: "art_runtime_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
         "art_runtime_tests_defaults",
@@ -845,6 +849,7 @@ art_cc_defaults {
 // TODO(b/192274705): Remove this module when the migration to standalone ART gtests is complete.
 art_cc_test {
     name: "art_runtime_compiler_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
         "art_runtime_compiler_tests_defaults",

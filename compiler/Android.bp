@@ -30,6 +30,7 @@ package {
 
 art_cc_defaults {
     name: "libart-compiler-defaults",
+    cflags: ["-O3"],
     defaults: ["art_defaults"],
     host_supported: true,
     srcs: [
@@ -203,6 +204,7 @@ gensrcs {
 
 art_cc_library {
     name: "libart-compiler",
+    cflags: ["-O3"],
     defaults: [
         "libart-compiler-defaults",
         "dex2oat-pgo-defaults",
@@ -264,6 +266,7 @@ cc_defaults {
 
 art_cc_library {
     name: "libartd-compiler",
+    cflags: ["-O3"],
     defaults: [
         "art_debug_defaults",
         "libart-compiler-defaults",
@@ -339,6 +342,7 @@ art_cc_defaults {
 
 art_cc_library {
     name: "libart-compiler-gtest",
+    cflags: ["-O3"],
     defaults: [
         "libart-gtest-defaults",
         "libart-compiler-gtest-common",
@@ -474,6 +478,7 @@ art_cc_defaults {
 // TODO(b/192274705): Remove this module when the migration to standalone ART gtests is complete.
 art_cc_test {
     name: "art_compiler_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
         "art_compiler_tests_defaults",
@@ -513,6 +518,7 @@ art_cc_test {
 
 art_cc_test {
     name: "art_compiler_host_tests",
+    cflags: ["-O3"],
     device_supported: false,
     defaults: [
         "art_gtest_defaults",
