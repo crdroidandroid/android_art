@@ -25,6 +25,7 @@ package {
 
 art_cc_defaults {
     name: "libart-dex2oat-defaults",
+    cflags: ["-O3"],
     defaults: ["art_defaults"],
     host_supported: true,
     srcs: [
@@ -194,6 +195,7 @@ art_cc_library_static {
 
 cc_defaults {
     name: "dex2oat-defaults",
+    cflags: ["-O3"],
     host_supported: true,
     defaults: ["art_defaults"],
 
@@ -227,6 +229,7 @@ cc_defaults {
         "//art:__subpackages__",
         "//external/vixl",
     ],
+    cflags: ["-O3"],
     pgo: {
         instrumentation: true,
         benchmarks: ["dex2oat"],
@@ -257,6 +260,7 @@ cc_defaults {
 
 art_cc_binary {
     name: "dex2oat",
+    cflags: ["-O3"],
     defaults: [
         "dex2oat-defaults",
         "dex2oat-pgo-defaults",
@@ -323,6 +327,7 @@ art_cc_binary {
 
 art_cc_binary {
     name: "dex2oatd",
+    cflags: ["-O3"],
     defaults: [
         "art_debug_defaults",
         "dex2oat-defaults",
@@ -537,6 +542,7 @@ art_cc_defaults {
 // TODO(b/192274705): Remove this module when the migration to standalone ART gtests is complete.
 art_cc_test {
     name: "art_dex2oat_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
         "art_dex2oat_tests_defaults",
