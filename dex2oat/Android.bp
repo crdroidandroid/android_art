@@ -16,6 +16,7 @@
 
 art_cc_defaults {
     name: "libart-dex2oat-defaults",
+    cflags: ["-O3"],
     defaults: ["art_defaults"],
     host_supported: true,
     srcs: [
@@ -87,12 +88,14 @@ art_cc_static_library {
 
 cc_library_headers {
     name: "dex2oat_headers",
+    cflags: ["-O3"],
     host_supported: true,
     export_include_dirs: ["include"],
 }
 
 cc_defaults {
     name: "dex2oat-defaults",
+    cflags: ["-O3"],
     host_supported: true,
     defaults: ["art_defaults"],
     srcs: [
@@ -114,6 +117,7 @@ cc_defaults {
 
 cc_defaults {
     name: "dex2oat-pgo-defaults",
+    cflags: ["-O3"],
     pgo: {
         instrumentation: true,
         benchmarks: ["dex2oat"],
@@ -154,6 +158,7 @@ cc_defaults {
 
 art_cc_binary {
     name: "dex2oat",
+    cflags: ["-O3"],
     defaults: [
         "dex2oat-defaults",
         "dex2oat-pgo-defaults",
@@ -190,6 +195,7 @@ art_cc_binary {
 
 art_cc_binary {
     name: "dex2oatd",
+    cflags: ["-O3"],
     defaults: [
         "art_debug_defaults",
         "dex2oat-defaults",
@@ -210,6 +216,7 @@ art_cc_binary {
 
 art_cc_binary {
     name: "dex2oats",
+    cflags: ["-O3"],
     device_supported: false,
     static_executable: true,
     defaults: ["dex2oat-defaults"],
@@ -239,6 +246,7 @@ art_cc_binary {
 
 art_cc_binary {
     name: "dex2oatds",
+    cflags: ["-O3"],
     device_supported: false,
     static_executable: true,
     defaults: [
@@ -271,6 +279,7 @@ art_cc_binary {
 
 art_cc_test {
     name: "art_dex2oat_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
     ],
