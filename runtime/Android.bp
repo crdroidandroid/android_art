@@ -506,6 +506,7 @@ gensrcs {
 
 art_cc_library {
     name: "libart",
+    cflags: ["-O3"],
     defaults: ["libart_defaults"],
     // Leave the symbols in the shared library so that stack unwinders can
     // produce meaningful name resolution.
@@ -536,6 +537,7 @@ art_cc_library {
 
 art_cc_library {
     name: "libartd",
+    cflags: ["-O3"],
     defaults: [
         "art_debug_defaults",
         "libart_defaults",
@@ -557,6 +559,7 @@ art_cc_library {
 
 art_cc_library {
     name: "libart-runtime-gtest",
+    cflags: ["-O3"],
     defaults: ["libart-gtest-defaults"],
     srcs: [
         "common_runtime_test.cc",
@@ -575,6 +578,7 @@ art_cc_library {
 
 art_cc_test {
     name: "art_runtime_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
     ],
@@ -667,6 +671,7 @@ art_cc_test {
 
 art_cc_test {
     name: "art_runtime_compiler_tests",
+    cflags: ["-O3"],
     defaults: [
         "art_gtest_defaults",
     ],
