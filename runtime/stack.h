@@ -23,6 +23,7 @@
 
 #include "base/locks.h"
 #include "base/macros.h"
+#include "obj_ptr.h"
 #include "quick/quick_method_frame_info.h"
 #include "stack_map.h"
 
@@ -194,7 +195,7 @@ class StackVisitor {
 
   uint32_t GetDexPc(bool abort_on_failure = true) const REQUIRES_SHARED(Locks::mutator_lock_);
 
-  mirror::Object* GetThisObject() const REQUIRES_SHARED(Locks::mutator_lock_);
+  ObjPtr<mirror::Object> GetThisObject() const REQUIRES_SHARED(Locks::mutator_lock_);
 
   size_t GetNativePcOffset() const REQUIRES_SHARED(Locks::mutator_lock_);
 
@@ -238,6 +239,11 @@ class StackVisitor {
   // Values will be set in debugger shadow frames. Debugger will make sure deoptimization
   // is triggered to make the values effective.
   bool SetVReg(ArtMethod* m, uint16_t vreg, uint32_t new_value, VRegKind kind)
+      REQUIRES_SHARED(Locks::mutator_lock_);
+
+  // Values will be set in debugger shadow frames. Debugger will make sure deoptimization
+  // is triggered to make the values effective.
+  bool SetVRegReference(ArtMethod* m, uint16_t vreg, ObjPtr<mirror::Object> new_value)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
   // Values will be set in debugger shadow frames. Debugger will make sure deoptimization
@@ -334,6 +340,9 @@ class StackVisitor {
       REQUIRES_SHARED(Locks::mutator_lock_);
   bool GetRegisterPairIfAccessible(uint32_t reg_lo, uint32_t reg_hi, VRegKind kind_lo,
                                    uint64_t* val) const
+      REQUIRES_SHARED(Locks::mutator_lock_);
+
+  ShadowFrame* PrepareSetVReg(ArtMethod* m, uint16_t vreg, bool wide)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
   void SanityCheckFrame() const REQUIRES_SHARED(Locks::mutator_lock_);
