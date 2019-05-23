@@ -466,7 +466,7 @@ bool ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   // Allocate the object as non-movable so that there are no cases where Object::IsClass returns
   // the incorrect result when comparing to-space vs from-space.
   Handle<mirror::Class> java_lang_Class(hs.NewHandle(ObjPtr<mirror::Class>::DownCast(
-      heap->AllocNonMovableObject<true>(self, nullptr, class_class_size, VoidFunctor()))));
+      heap->AllocNonMovableObject(self, nullptr, class_class_size, VoidFunctor()))));
   CHECK(java_lang_Class != nullptr);
   java_lang_Class->SetClassFlags(mirror::kClassFlagClass);
   java_lang_Class->SetClass(java_lang_Class.Get());
@@ -495,10 +495,10 @@ bool ClassLinker::InitWithoutImage(std::vector<std::unique_ptr<const DexFile>> b
   java_lang_Object->SetObjectSize(sizeof(mirror::Object));
   // Allocate in non-movable so that it's possible to check if a JNI weak global ref has been
   // cleared without triggering the read barrier and unintentionally mark the sentinel alive.
-  runtime->SetSentinel(heap->AllocNonMovableObject<true>(self,
-                                                         java_lang_Object.Get(),
-                                                         java_lang_Object->GetObjectSize(),
-                                                         VoidFunctor()));
+  runtime->SetSentinel(heap->AllocNonMovableObject(self,
+                                                   java_lang_Object.Get(),
+                                                   java_lang_Object->GetObjectSize(),
+                                                   VoidFunctor()));
 
   // Initialize the SubtypeCheck bitstring for java.lang.Object and java.lang.Class.
   if (kBitstringSubtypeCheckEnabled) {
@@ -1063,7 +1063,7 @@ bool ClassLinker::InitFromBootImage(std::string* error_msg) {
   java_lang_Object->SetObjectSize(sizeof(mirror::Object));
   // Allocate in non-movable so that it's possible to check if a JNI weak global ref has been
   // cleared without triggering the read barrier and unintentionally mark the sentinel alive.
-  runtime->SetSentinel(heap->AllocNonMovableObject<true>(
+  runtime->SetSentinel(heap->AllocNonMovableObject(
       self, java_lang_Object, java_lang_Object->GetObjectSize(), VoidFunctor()));
 
   const std::vector<std::string>& boot_class_path_locations = runtime->GetBootClassPathLocations();
@@ -2569,8 +2569,8 @@ ObjPtr<mirror::Class> ClassLinker::AllocClass(Thread* self,
   gc::Heap* heap = Runtime::Current()->GetHeap();
   mirror::Class::InitializeClassVisitor visitor(class_size);
   ObjPtr<mirror::Object> k = (kMovingClasses && kMovable) ?
-      heap->AllocObject<true>(self, java_lang_Class, class_size, visitor) :
-      heap->AllocNonMovableObject<true>(self, java_lang_Class, class_size, visitor);
+      heap->AllocObject(self, java_lang_Class, class_size, visitor) :
+      heap->AllocNonMovableObject(self, java_lang_Class, class_size, visitor);
   if (UNLIKELY(k == nullptr)) {
     self->AssertPendingOOMException();
     return nullptr;
@@ -5911,7 +5911,8 @@ bool ClassLinker::LinkClass(Thread* self,
     CHECK(!klass->IsResolved());
     // Retire the temporary class and create the correctly sized resolved class.
     StackHandleScope<1> hs(self);
-    auto h_new_class = hs.NewHandle(klass->CopyOf(self, class_size, imt, image_pointer_size_));
+    Handle<mirror::Class> h_new_class =
+        hs.NewHandle(mirror::Class::CopyOf(klass, self, class_size, imt, image_pointer_size_));
     // Set arrays to null since we don't want to have multiple classes with the same ArtField or
     // ArtMethod array pointers. If this occurs, it causes bugs in remembered sets since the GC
     // may not see any references to the target space and clean the card for a class if another
@@ -6273,7 +6274,7 @@ bool ClassLinker::LinkVirtualMethods(
   } else if (klass->HasSuperClass()) {
     const size_t super_vtable_length = klass->GetSuperClass()->GetVTableLength();
     const size_t max_count = num_virtual_methods + super_vtable_length;
-    StackHandleScope<2> hs(self);
+    StackHandleScope<3> hs(self);
     Handle<mirror::Class> super_class(hs.NewHandle(klass->GetSuperClass()));
     MutableHandle<mirror::PointerArray> vtable;
     if (super_class->ShouldHaveEmbeddedVTable()) {
@@ -6297,16 +6298,16 @@ bool ClassLinker::LinkVirtualMethods(
       }
     } else {
       DCHECK(super_class->IsAbstract() && !super_class->IsArrayClass());
-      ObjPtr<mirror::PointerArray> super_vtable = super_class->GetVTable();
+      Handle<mirror::PointerArray> super_vtable = hs.NewHandle(super_class->GetVTable());
       CHECK(super_vtable != nullptr) << super_class->PrettyClass();
       // We might need to change vtable if we have new virtual methods or new interfaces (since that
       // might give us new default methods). See comment above.
       if (num_virtual_methods == 0 && super_class->GetIfTableCount() == klass->GetIfTableCount()) {
-        klass->SetVTable(super_vtable);
+        klass->SetVTable(super_vtable.Get());
         return true;
       }
-      vtable = hs.NewHandle(
-          ObjPtr<mirror::PointerArray>::DownCast(super_vtable->CopyOf(self, max_count)));
+      vtable = hs.NewHandle(ObjPtr<mirror::PointerArray>::DownCast(
+          mirror::Array::CopyOf(super_vtable, self, max_count)));
       if (UNLIKELY(vtable == nullptr)) {
         self->AssertPendingOOMException();
         return false;
@@ -6442,7 +6443,8 @@ bool ClassLinker::LinkVirtualMethods(
     // Shrink vtable if possible
     CHECK_LE(actual_count, max_count);
     if (actual_count < max_count) {
-      vtable.Assign(ObjPtr<mirror::PointerArray>::DownCast(vtable->CopyOf(self, actual_count)));
+      vtable.Assign(ObjPtr<mirror::PointerArray>::DownCast(
+          mirror::Array::CopyOf(vtable, self, actual_count)));
       if (UNLIKELY(vtable == nullptr)) {
         self->AssertPendingOOMException();
         return false;
@@ -6700,8 +6702,10 @@ bool ClassLinker::AllocateIfTableMethodArrays(Thread* self,
         DCHECK(if_table != nullptr);
         DCHECK(if_table->GetMethodArray(i) != nullptr);
         // If we are working on a super interface, try extending the existing method array.
-        method_array = ObjPtr<mirror::PointerArray>::DownCast(
-            if_table->GetMethodArray(i)->Clone(self));
+        StackHandleScope<1u> hs(self);
+        Handle<mirror::PointerArray> old_array = hs.NewHandle(if_table->GetMethodArray(i));
+        method_array =
+            ObjPtr<mirror::PointerArray>::DownCast(mirror::Object::Clone(old_array, self));
       } else {
         method_array = AllocPointerArray(self, num_methods);
       }
@@ -7121,7 +7125,7 @@ bool ClassLinker::SetupInterfaceLookupTable(Thread* self, Handle<mirror::Class> 
   if (new_ifcount < ifcount) {
     DCHECK_NE(num_interfaces, 0U);
     iftable.Assign(ObjPtr<mirror::IfTable>::DownCast(
-        iftable->CopyOf(self, new_ifcount * mirror::IfTable::kMax)));
+        mirror::IfTable::CopyOf(iftable, self, new_ifcount * mirror::IfTable::kMax)));
     if (UNLIKELY(iftable == nullptr)) {
       self->AssertPendingOOMException();
       return false;
@@ -7439,7 +7443,7 @@ class ClassLinker::LinkInterfaceMethodsHelper {
 
   ObjPtr<mirror::PointerArray> UpdateVtable(
       const std::unordered_map<size_t, ClassLinker::MethodTranslation>& default_translations,
-      ObjPtr<mirror::PointerArray> old_vtable) REQUIRES_SHARED(Locks::mutator_lock_);
+      Handle<mirror::PointerArray> old_vtable) REQUIRES_SHARED(Locks::mutator_lock_);
 
   void UpdateIfTable(Handle<mirror::IfTable> iftable) REQUIRES_SHARED(Locks::mutator_lock_);
 
@@ -7767,7 +7771,7 @@ void ClassLinker::LinkInterfaceMethodsHelper::ReallocMethods() {
 
 ObjPtr<mirror::PointerArray> ClassLinker::LinkInterfaceMethodsHelper::UpdateVtable(
     const std::unordered_map<size_t, ClassLinker::MethodTranslation>& default_translations,
-    ObjPtr<mirror::PointerArray> old_vtable) {
+    Handle<mirror::PointerArray> old_vtable) {
   // Update the vtable to the new method structures. We can skip this for interfaces since they
   // do not have vtables.
   const size_t old_vtable_count = old_vtable->GetLength();
@@ -7776,8 +7780,8 @@ ObjPtr<mirror::PointerArray> ClassLinker::LinkInterfaceMethodsHelper::UpdateVtab
                                   default_methods_.size() +
                                   default_conflict_methods_.size();
 
-  ObjPtr<mirror::PointerArray> vtable =
-      ObjPtr<mirror::PointerArray>::DownCast(old_vtable->CopyOf(self_, new_vtable_count));
+  ObjPtr<mirror::PointerArray> vtable = ObjPtr<mirror::PointerArray>::DownCast(
+      mirror::Array::CopyOf(old_vtable, self_, new_vtable_count));
   if (UNLIKELY(vtable == nullptr)) {
     self_->AssertPendingOOMException();
     return nullptr;
@@ -8111,7 +8115,7 @@ bool ClassLinker::LinkInterfaceMethods(
     self->EndAssertNoThreadSuspension(old_cause);
 
     if (fill_tables) {
-      vtable.Assign(helper.UpdateVtable(default_translations, vtable.Get()));
+      vtable.Assign(helper.UpdateVtable(default_translations, vtable));
       if (UNLIKELY(vtable == nullptr)) {
         // The helper has already called self->AssertPendingOOMException();
         return false;

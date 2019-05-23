@@ -2141,23 +2141,25 @@ void Thread::DumpJavaStack(std::ostream& os, bool check_suspended, bool dump_loc
   // assumption that there is no exception pending on entry. Thus, stash any pending exception.
   // Thread::Current() instead of this in case a thread is dumping the stack of another suspended
   // thread.
-  StackHandleScope<1> scope(Thread::Current());
-  Handle<mirror::Throwable> exc;
-  bool have_exception = false;
-  if (IsExceptionPending()) {
-    exc = scope.NewHandle(GetException());
-    const_cast<Thread*>(this)->ClearException();
-    have_exception = true;
-  }
+  struct ScopedExceptionStorage {
+    ScopedExceptionStorage() : scope(Thread::Current()) {
+      exc = scope.NewHandle(scope.Self()->GetException());
+      scope.Self()->ClearException();
+    }
+    ~ScopedExceptionStorage() {
+      if (exc != nullptr) {
+        scope.Self()->SetException(exc.Get());
+      }
+    }
+    StackHandleScope<1> scope;
+    Handle<mirror::Throwable> exc;
+  };
+  ScopedExceptionStorage ses;
 
   std::unique_ptr<Context> context(Context::Create());
   StackDumpVisitor dumper(os, const_cast<Thread*>(this), context.get(),
                           !tls32_.throwing_OutOfMemoryError, check_suspended, dump_locks);
   dumper.WalkStack();
-
-  if (have_exception) {
-    const_cast<Thread*>(this)->SetException(exc.Get());
-  }
 }
 
 void Thread::DumpStack(std::ostream& os,
@@ -3547,7 +3549,7 @@ void Thread::QuickDeliverException() {
     // Instrumentation may cause GC so keep the exception object safe.
     StackHandleScope<1> hs(this);
     HandleWrapperObjPtr<mirror::Throwable> h_exception(hs.NewHandleWrapper(&exception));
-    instrumentation->ExceptionThrownEvent(this, exception.Ptr());
+    instrumentation->ExceptionThrownEvent(this, exception);
   }
   // Does instrumentation need to deoptimize the stack or otherwise go to interpreter for something?
   // Note: we do this *after* reporting the exception to instrumentation in case it now requires

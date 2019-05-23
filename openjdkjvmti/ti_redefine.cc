@@ -143,11 +143,18 @@ class ObsoleteMap {
     art::ArtMethod* obsolete_method;
   };
 
-  class ObsoleteMapIter : public std::iterator<std::forward_iterator_tag, ObsoleteMethodPair> {
+  class ObsoleteMapIter {
    public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = ObsoleteMethodPair;
+    using difference_type = ptrdiff_t;
+    using pointer = void;    // Unsupported.
+    using reference = void;  // Unsupported.
+
     ObsoleteMethodPair operator*() const
         REQUIRES(art::Locks::mutator_lock_, art::Roles::uninterruptible_) {
-      art::ArtMethod* obsolete = map_->FindObsoleteVersion(iter_->first);
+      art::ArtMethod* obsolete = map_->obsolete_methods_->GetElementPtrSize<art::ArtMethod*>(
+          iter_->second, art::kRuntimePointerSize);
       DCHECK(obsolete != nullptr);
       return { iter_->first, obsolete };
     }
@@ -160,13 +167,13 @@ class ObsoleteMap {
       return !(*this == other);
     }
 
-    ObsoleteMapIter operator++(int) const {
+    ObsoleteMapIter operator++(int) {
       ObsoleteMapIter retval = *this;
       ++(*this);
       return retval;
     }
 
-    ObsoleteMapIter operator++() const {
+    ObsoleteMapIter operator++() {
       ++iter_;
       return *this;
     }
@@ -177,7 +184,7 @@ class ObsoleteMap {
         : map_(map), iter_(iter) {}
 
     const ObsoleteMap* map_;
-    mutable std::unordered_map<art::ArtMethod*, int32_t>::const_iterator iter_;
+    std::unordered_map<art::ArtMethod*, int32_t>::const_iterator iter_;
 
     friend class ObsoleteMap;
   };
@@ -637,7 +644,8 @@ void Redefiner::ClassRedefinition::FindAndAllocateObsoleteMethods(
     art::MutexLock mu(driver_->self_, *art::Locks::thread_list_lock_);
     art::ThreadList* list = art::Runtime::Current()->GetThreadList();
     list->ForEach(DoAllocateObsoleteMethodsCallback, static_cast<void*>(&ctx));
-    // Update JIT Data structures to point to the new method.
+    // After we've done walking all threads' stacks and updating method pointers on them,
+    // update JIT data structures (used by the stack walk above) to point to the new methods.
     art::jit::Jit* jit = art::Runtime::Current()->GetJit();
     if (jit != nullptr) {
       for (const ObsoleteMap::ObsoleteMethodPair& it : *ctx.obsolete_map) {
@@ -1595,7 +1603,8 @@ bool Redefiner::ClassRedefinition::EnsureClassAllocationsFinished(
     return false;
   }
   // Allocate the classExt
-  art::Handle<art::mirror::ClassExt> ext(hs.NewHandle(klass->EnsureExtDataPresent(driver_->self_)));
+  art::Handle<art::mirror::ClassExt> ext =
+      hs.NewHandle(art::mirror::Class::EnsureExtDataPresent(klass, driver_->self_));
   if (ext == nullptr) {
     // No memory. Clear exception (it's not useful) and return error.
     driver_->self_->AssertPendingOOMException();
@@ -1610,8 +1619,8 @@ bool Redefiner::ClassRedefinition::EnsureClassAllocationsFinished(
   // however, since that can happen at any time.
   cur_data->SetOldObsoleteMethods(ext->GetObsoleteMethods());
   cur_data->SetOldDexCaches(ext->GetObsoleteDexCaches());
-  if (!ext->ExtendObsoleteArrays(
-        driver_->self_, klass->GetDeclaredMethodsSlice(art::kRuntimePointerSize).size())) {
+  if (!art::mirror::ClassExt::ExtendObsoleteArrays(
+          ext, driver_->self_, klass->GetDeclaredMethodsSlice(art::kRuntimePointerSize).size())) {
     // OOM. Clear exception and return error.
     driver_->self_->AssertPendingOOMException();
     driver_->self_->ClearException();
