@@ -3327,6 +3327,60 @@ void IntrinsicCodeGeneratorARM64::VisitFP16LessEquals(HInvoke* invoke) {
   GenerateFP16Compare(invoke, codegen_, masm, ls);
 }
 
+void IntrinsicLocationsBuilderARM64::VisitFP16Compare(HInvoke* invoke) {
+  if (!codegen_->GetInstructionSetFeatures().HasFP16()) {
+    return;
+  }
+
+  CreateIntIntToIntLocations(allocator_, invoke);
+  invoke->GetLocations()->AddTemp(Location::RequiresFpuRegister());
+  invoke->GetLocations()->AddTemp(Location::RequiresFpuRegister());
+}
+
+void IntrinsicCodeGeneratorARM64::VisitFP16Compare(HInvoke* invoke) {
+  MacroAssembler* masm = GetVIXLAssembler();
+  auto compareOp = [masm](const Register out,
+                          const VRegister& in0,
+                          const VRegister& in1) {
+    vixl::aarch64::Label end;
+    vixl::aarch64::Label equal;
+    vixl::aarch64::Label normal;
+
+    __ Fcmp(in0, in1);
+    __ B(eq, &equal);
+    __ B(vc, &normal);
+
+    // Either of the inputs is NaN.
+    // NaN is equal to itself and greater than any other number.
+    // Therefore:
+    // - if only in0 is NaN => return 1
+    // - if only in1 is NaN => return -1
+    // - if both in0 and in1 are NaN => return 0
+    __ Fcmp(in0, 0.0);
+    __ Mov(out, -1);
+    __ B(vc, &end);  // in0 != NaN => out = -1
+    __ Fcmp(in1, 0.0);
+    __ Cset(out, vc); // if in1 != NaN => out = 1, otherwise both are NaNs => out = 0
+    __ B(&end);
+
+    // in0 == in1 or if one of the inputs is +0 and the other is -0
+    __ Bind(&equal);
+    // Reverse operand order because -0 > +0 when compared as S registers.
+    // The instruction Fmov(Hregister, Wregister) zero extends the Hregister.
+    // Therefore the value of bits[127:16] will not matter when doing the
+    // below Fcmp as they are set to 0.
+    __ Fcmp(in1.S(), in0.S());
+
+    __ Bind(&normal);
+    __ Cset(out, gt);
+    __ Csinv(out, out, wzr, pl);
+
+    __ Bind(&end);
+  };
+
+  GenerateFP16Compare(invoke, codegen_, masm, compareOp);
+}
+
 UNIMPLEMENTED_INTRINSIC(ARM64, ReferenceGetReferent)
 
 UNIMPLEMENTED_INTRINSIC(ARM64, StringStringIndexOf);
