@@ -175,6 +175,8 @@
   V(FP16GreaterEquals, kStatic, kNeedsEnvironmentOrCache, kNoSideEffects, kNoThrow, "Llibcore/util/FP16;", "greaterEquals", "(SS)Z") \
   V(FP16Less, kStatic, kNeedsEnvironmentOrCache, kNoSideEffects, kNoThrow, "Llibcore/util/FP16;", "less", "(SS)Z") \
   V(FP16LessEquals, kStatic, kNeedsEnvironmentOrCache, kNoSideEffects, kNoThrow, "Llibcore/util/FP16;", "lessEquals", "(SS)Z") \
+  V(FP16Min, kStatic, kNeedsEnvironmentOrCache, kNoSideEffects, kNoThrow, "Llibcore/util/FP16;", "min", "(SS)S") \
+  V(FP16Max, kStatic, kNeedsEnvironmentOrCache, kNoSideEffects, kNoThrow, "Llibcore/util/FP16;", "max", "(SS)S") \
   V(StringCharAt, kVirtual, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow, "Ljava/lang/String;", "charAt", "(I)C") \
   V(StringCompareTo, kVirtual, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow, "Ljava/lang/String;", "compareTo", "(Ljava/lang/String;)I") \
   V(StringEquals, kVirtual, kNeedsEnvironmentOrCache, kReadSideEffects, kCanThrow, "Ljava/lang/String;", "equals", "(Ljava/lang/Object;)Z") \
