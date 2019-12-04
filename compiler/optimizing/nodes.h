@@ -8116,6 +8116,10 @@ inline HInstruction* HuntForDeclaration(HInstruction* instruction) {
   return instruction;
 }
 
+inline bool IsAddOrSub(const HInstruction* instruction) {
+  return instruction->IsAdd() || instruction->IsSub();
+}
+
 void RemoveEnvironmentUses(HInstruction* instruction);
 bool HasEnvironmentUsedByOthers(HInstruction* instruction);
 void ResetEnvironmentInputRecords(HInstruction* instruction);
