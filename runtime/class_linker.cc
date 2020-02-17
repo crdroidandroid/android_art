@@ -8579,6 +8579,7 @@ ArtMethod* ClassLinker::ResolveMethod(uint32_t method_idx,
                                       Handle<mirror::ClassLoader> class_loader,
                                       ArtMethod* referrer,
                                       InvokeType type) {
+  DCHECK(!Thread::Current()->IsExceptionPending()) << Thread::Current()->GetException()->Dump();
   DCHECK(dex_cache != nullptr);
   DCHECK(referrer == nullptr || !referrer->IsProxyMethod());
   // Check for hit in the dex cache.
@@ -8719,6 +8720,7 @@ ArtField* ClassLinker::ResolveField(uint32_t field_idx,
                                     Handle<mirror::ClassLoader> class_loader,
                                     bool is_static) {
   DCHECK(dex_cache != nullptr);
+  DCHECK(!Thread::Current()->IsExceptionPending()) << Thread::Current()->GetException()->Dump();
   ArtField* resolved = dex_cache->GetResolvedField(field_idx, image_pointer_size_);
   Thread::PoisonObjectPointersIfDebug();
   if (resolved != nullptr) {
