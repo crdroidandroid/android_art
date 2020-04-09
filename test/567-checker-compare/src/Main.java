@@ -23,7 +23,7 @@ public class Main {
   /// CHECK-START: void Main.$opt$noinline$testReplaceInputWithItself(int) builder (after)
   /// CHECK-DAG:     <<ArgX:i\d+>>   ParameterValue
   /// CHECK-DAG:     <<Zero:i\d+>>   IntConstant 0
-  /// CHECK-DAG:     <<Cmp:i\d+>>    InvokeStaticOrDirect [<<ArgX>>,<<Zero>>{{(,[ij]\d+)?}}] intrinsic:IntegerCompare
+  /// CHECK-DAG:     <<Cmp:i\d+>>    Compare [<<ArgX>>,<<Zero>>]
   /// CHECK-DAG:                     GreaterThanOrEqual [<<Cmp>>,<<Zero>>]
 
   /// CHECK-START: void Main.$opt$noinline$testReplaceInputWithItself(int) instruction_simplifier (after)
@@ -66,14 +66,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareBytes(byte, byte) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareBytes(byte, byte) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareBytes(byte, byte) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareBytes(byte, byte) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   private static int compareBytes(byte x, byte y) {
@@ -81,14 +77,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareShorts(short, short) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareShorts(short, short) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareShorts(short, short) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareShorts(short, short) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   private static int compareShorts(short x, short y) {
@@ -96,14 +88,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareChars(char, char) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareChars(char, char) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareChars(char, char) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareChars(char, char) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   private static int compareChars(char x, char y) {
@@ -111,14 +99,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareInts(int, int) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareInts(int, int) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareInts(int, int) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareInts(int, int) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   private static int compareInts(int x, int y) {
@@ -126,14 +110,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareLongs(long, long) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:LongCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareLongs(long, long) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareLongs(long, long) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareLongs(long, long) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   private static int compareLongs(long x, long y) {
@@ -142,14 +122,10 @@ public class Main {
 
 
   /// CHECK-START: int Main.compareByteShort(byte, short) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareByteShort(byte, short) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareByteShort(byte, short) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareByteShort(byte, short) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareByteShort(byte x, short y) {
@@ -157,14 +133,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareByteChar(byte, char) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareByteChar(byte, char) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareByteChar(byte, char) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareByteChar(byte, char) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareByteChar(byte x, char y) {
@@ -172,14 +144,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareByteInt(byte, int) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareByteInt(byte, int) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareByteInt(byte, int) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareByteInt(byte, int) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareByteInt(byte x, int y) {
@@ -188,14 +156,10 @@ public class Main {
 
 
   /// CHECK-START: int Main.compareShortByte(short, byte) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareShortByte(short, byte) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareShortByte(short, byte) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareShortByte(short, byte) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareShortByte(short x, byte y) {
@@ -203,14 +167,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareShortChar(short, char) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareShortChar(short, char) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareShortChar(short, char) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareShortChar(short, char) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareShortChar(short x, char y) {
@@ -218,14 +178,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareShortInt(short, int) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareShortInt(short, int) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareShortInt(short, int) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareShortInt(short, int) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareShortInt(short x, int y) {
@@ -234,14 +190,10 @@ public class Main {
 
 
   /// CHECK-START: int Main.compareCharByte(char, byte) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareCharByte(char, byte) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareCharByte(char, byte) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareCharByte(char, byte) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareCharByte(char x, byte y) {
@@ -249,14 +201,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareCharShort(char, short) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareCharShort(char, short) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareCharShort(char, short) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareCharShort(char, short) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareCharShort(char x, short y) {
@@ -264,14 +212,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareCharInt(char, int) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareCharInt(char, int) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareCharInt(char, int) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareCharInt(char, int) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareCharInt(char x, int y) {
@@ -280,14 +224,10 @@ public class Main {
 
 
   /// CHECK-START: int Main.compareIntByte(int, byte) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareIntByte(int, byte) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareIntByte(int, byte) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareIntByte(int, byte) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareIntByte(int x, byte y) {
@@ -295,14 +235,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareIntShort(int, short) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareIntShort(int, short) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareIntShort(int, short) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareIntShort(int, short) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareIntShort(int x, short y) {
@@ -310,14 +246,10 @@ public class Main {
   }
 
   /// CHECK-START: int Main.compareIntChar(int, char) builder (after)
-  /// CHECK-DAG:     <<Result:i\d+>> InvokeStaticOrDirect intrinsic:IntegerCompare
-  /// CHECK-DAG:                     Return [<<Result>>]
-
-  /// CHECK-START: int Main.compareIntChar(int, char) instruction_simplifier (after)
   /// CHECK-DAG:     <<Result:i\d+>> Compare
   /// CHECK-DAG:                     Return [<<Result>>]
 
-  /// CHECK-START: int Main.compareIntChar(int, char) instruction_simplifier (after)
+  /// CHECK-START: int Main.compareIntChar(int, char) builder (after)
   /// CHECK-NOT:                     InvokeStaticOrDirect
 
   public static int compareIntChar(int x, char y) {

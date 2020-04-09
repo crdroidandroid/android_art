@@ -153,29 +153,21 @@ public class Main {
     }
   }
 
-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (before)
-  /// CHECK-DAG:  <<Length:i\d+>>   InvokeVirtual intrinsic:StringLength
-  /// CHECK-DAG:                    Return [<<Length>>]
-
-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (after)
+  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) builder (after)
   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
   /// CHECK-DAG:  <<Length:i\d+>>   ArrayLength [<<NullCk>>] is_string_length:true
   /// CHECK-DAG:                    Return [<<Length>>]
 
-  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringLength
+  /// CHECK-START: int Main.$opt$noinline$getStringLength(java.lang.String) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   static public int $opt$noinline$getStringLength(String s) {
     if (doThrow) { throw new Error(); }
     return s.length();
   }
 
-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (before)
-  /// CHECK-DAG:  <<IsEmpty:z\d+>>  InvokeVirtual intrinsic:StringIsEmpty
-  /// CHECK-DAG:                    Return [<<IsEmpty>>]
-
-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (after)
+  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) builder (after)
   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
   /// CHECK-DAG:  <<Const0:i\d+>>   IntConstant 0
   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
@@ -183,19 +175,15 @@ public class Main {
   /// CHECK-DAG:  <<IsEmpty:z\d+>>  Equal [<<Length>>,<<Const0>>]
   /// CHECK-DAG:                    Return [<<IsEmpty>>]
 
-  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringIsEmpty
+  /// CHECK-START: boolean Main.$opt$noinline$isStringEmpty(java.lang.String) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   static public boolean $opt$noinline$isStringEmpty(String s) {
     if (doThrow) { throw new Error(); }
     return s.isEmpty();
   }
 
-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (before)
-  /// CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
-  /// CHECK-DAG:                    Return [<<Char>>]
-
-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
+  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) builder (after)
   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
   /// CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
   /// CHECK-DAG:  <<NullCk:l\d+>>   NullCheck [<<String>>]
@@ -204,24 +192,15 @@ public class Main {
   /// CHECK-DAG:  <<Char:c\d+>>     ArrayGet [<<NullCk>>,<<Bounds>>] is_string_char_at:true
   /// CHECK-DAG:                    Return [<<Char>>]
 
-  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-START: char Main.$opt$noinline$stringCharAt(java.lang.String, int) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   static public char $opt$noinline$stringCharAt(String s, int pos) {
     if (doThrow) { throw new Error(); }
     return s.charAt(pos);
   }
 
-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (before)
-  /// CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
-  /// CHECK-DAG:  <<Char:c\d+>>     InvokeVirtual intrinsic:StringCharAt
-
-  //                                The return value can come from a Phi should the two returns be merged.
-  //                                Please refer to the Smali code for a more detailed verification.
-
-  /// CHECK-DAG:                    Return [{{(c|i)\d+}}]
-
-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (after)
+  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) builder (after)
   /// CHECK-DAG:  <<String:l\d+>>   ParameterValue
   /// CHECK-DAG:  <<Pos:i\d+>>      ParameterValue
   /// CHECK-DAG:  <<Int:i\d+>>      IntConstant 0
@@ -231,8 +210,8 @@ public class Main {
   /// CHECK-DAG:  <<Char:c\d+>>     ArrayGet [<<NullCk>>,<<Bounds>>] is_string_char_at:true
   /// CHECK-DAG:                    Return [{{(c|i)\d+}}]
 
-  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-START: char Main.$opt$noinline$stringCharAtCatch(java.lang.String, int) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   static public char $opt$noinline$stringCharAtCatch(String s, int pos) {
     if (doThrow) { throw new Error(); }
@@ -243,19 +222,14 @@ public class Main {
     }
   }
 
-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (before)
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringLength
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-
-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) builder (after)
   /// CHECK-DAG:                    ArrayLength is_string_length:true
   /// CHECK-DAG:                    ArrayLength is_string_length:true
   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
 
-  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringLength
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   /// CHECK-START: int Main.$opt$noinline$stringSumChars(java.lang.String) GVN (after)
   /// CHECK-DAG:                    ArrayLength is_string_length:true
@@ -274,16 +248,13 @@ public class Main {
     return sum;
   }
 
-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (before)
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-
-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (after)
+  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) builder (after)
   /// CHECK-DAG:                    ArrayLength is_string_length:true
   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
 
-  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   /// CHECK-START: int Main.$opt$noinline$stringSumLeadingChars(java.lang.String, int) BCE (after)
   /// CHECK-DAG:                    Deoptimize env:[[{{[^\]]*}}]]
@@ -300,13 +271,7 @@ public class Main {
     return sum;
   }
 
-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (before)
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-  /// CHECK-DAG:                    InvokeVirtual intrinsic:StringCharAt
-
-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (after)
+  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) builder (after)
   /// CHECK-DAG:                    ArrayLength is_string_length:true
   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
@@ -320,8 +285,8 @@ public class Main {
   /// CHECK-DAG:                    BoundsCheck is_string_char_at:true
   /// CHECK-DAG:                    ArrayGet is_string_char_at:true
 
-  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) instruction_simplifier (after)
-  /// CHECK-NOT:                    InvokeVirtual intrinsic:StringCharAt
+  /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) builder (after)
+  /// CHECK-NOT:                    InvokeVirtual
 
   /// CHECK-START: int Main.$opt$noinline$stringSum4LeadingChars(java.lang.String) BCE (after)
   /// CHECK-DAG:                    Deoptimize env:[[{{[^\]]*}}]]
