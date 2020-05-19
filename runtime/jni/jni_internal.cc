@@ -33,7 +33,7 @@
 #include "base/safe_map.h"
 #include "base/stl_util.h"
 #include "class_linker-inl.h"
-#include "class_root.h"
+#include "class_root-inl.h"
 #include "dex/dex_file-inl.h"
 #include "dex/utf-inl.h"
 #include "fault_handler.h"
