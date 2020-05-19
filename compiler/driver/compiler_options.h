@@ -69,6 +69,13 @@ class CompilerOptions final {
   static const size_t kDefaultInlineMaxCodeUnits = 32;
   static constexpr size_t kUnsetInlineMaxCodeUnits = -1;
 
+  enum class CompilerType : uint8_t {
+    kAotCompiler,             // AOT compiler.
+    kJitCompiler,             // Normal JIT compiler.
+    kSharedCodeJitCompiler,   // Zygote JIT producing code in the shared region area, putting
+                              // restrictions on, for example, how literals are being generated.
+  };
+
   enum class ImageType : uint8_t {
     kNone,                    // JIT or AOT app compilation producing only an oat file but no image.
     kBootImage,               // Creating boot image.
@@ -191,6 +198,19 @@ class CompilerOptions final {
     return implicit_so_checks_;
   }
 
+  bool IsAotCompiler() const {
+    return compiler_type_ == CompilerType::kAotCompiler;
+  }
+
+  bool IsJitCompiler() const {
+    return compiler_type_ == CompilerType::kJitCompiler ||
+           compiler_type_ == CompilerType::kSharedCodeJitCompiler;
+  }
+
+  bool IsJitCompilerForSharedCode() const {
+    return compiler_type_ == CompilerType::kSharedCodeJitCompiler;
+  }
+
   bool GetImplicitSuspendChecks() const {
     return implicit_suspend_checks_;
   }
@@ -218,11 +238,10 @@ class CompilerOptions final {
     return image_type_ == ImageType::kAppImage;
   }
 
-  // Returns whether we are compiling against a "core" image, which
-  // is an indicative we are running tests. The compiler will use that
-  // information for checking invariants.
-  bool CompilingWithCoreImage() const {
-    return compiling_with_core_image_;
+  // Returns whether we are running ART tests.
+  // The compiler will use that information for checking invariants.
+  bool CompileArtTest() const {
+    return compile_art_test_;
   }
 
   // Should the code be compiled as position independent?
@@ -359,10 +378,6 @@ class CompilerOptions final {
     return initialize_app_image_classes_;
   }
 
-  // Is `boot_image_filename` the name of a core image (small boot
-  // image used for ART testing only)?
-  static bool IsCoreImageFilename(const std::string& boot_image_filename);
-
  private:
   bool ParseDumpInitFailures(const std::string& option, std::string* error_msg);
   bool ParseRegisterAllocationStrategy(const std::string& option, std::string* error_msg);
@@ -391,8 +406,9 @@ class CompilerOptions final {
   // Results of AOT verification.
   const VerificationResults* verification_results_;
 
+  CompilerType compiler_type_;
   ImageType image_type_;
-  bool compiling_with_core_image_;
+  bool compile_art_test_;
   bool baseline_;
   bool debuggable_;
   bool generate_debug_info_;

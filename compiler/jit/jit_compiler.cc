@@ -55,6 +55,10 @@ void JitCompiler::ParseCompilerOptions() {
       UNREACHABLE();
     }
   }
+  // Set to appropriate JIT compiler type.
+  compiler_options_->compiler_type_ = runtime->IsZygote()
+      ? CompilerOptions::CompilerType::kSharedCodeJitCompiler
+      : CompilerOptions::CompilerType::kJitCompiler;
   // JIT is never PIC, no matter what the runtime compiler options specify.
   compiler_options_->SetNonPic();
 
@@ -106,8 +110,6 @@ void JitCompiler::ParseCompilerOptions() {
     instruction_set_features = InstructionSetFeatures::FromCppDefines();
   }
   compiler_options_->instruction_set_features_ = std::move(instruction_set_features);
-  compiler_options_->compiling_with_core_image_ =
-      CompilerOptions::IsCoreImageFilename(runtime->GetImageLocation());
 
   if (compiler_options_->GetGenerateDebugInfo()) {
     jit_logger_.reset(new JitLogger());

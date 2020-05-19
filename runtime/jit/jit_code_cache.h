@@ -266,6 +266,8 @@ class JitCodeCache {
               ArrayRef<const uint8_t> reserved_data,  // Uninitialized destination.
               const std::vector<Handle<mirror::Object>>& roots,
               ArrayRef<const uint8_t> stack_map,      // Compiler output (source).
+              const std::vector<uint8_t>& debug_info,
+              bool is_full_debug_info,
               bool osr,
               bool has_should_deoptimize_flag,
               const ArenaSet<ArtMethod*>& cha_single_implementation_list)
@@ -276,6 +278,9 @@ class JitCodeCache {
   void Free(Thread* self, JitMemoryRegion* region, const uint8_t* code, const uint8_t* data)
       REQUIRES_SHARED(Locks::mutator_lock_)
       REQUIRES(!Locks::jit_lock_);
+  void FreeLocked(JitMemoryRegion* region, const uint8_t* code, const uint8_t* data)
+      REQUIRES_SHARED(Locks::mutator_lock_)
+      REQUIRES(Locks::jit_lock_);
 
   // Perform a collection on the code cache.
   void GarbageCollectCache(Thread* self)
@@ -427,6 +432,7 @@ class JitCodeCache {
 
   // Remove CHA dependents and underlying allocations for entries in `method_headers`.
   void FreeAllMethodHeaders(const std::unordered_set<OatQuickMethodHeader*>& method_headers)
+      REQUIRES_SHARED(Locks::mutator_lock_)
       REQUIRES(!Locks::jit_lock_)
       REQUIRES(!Locks::cha_lock_);
 
@@ -436,9 +442,14 @@ class JitCodeCache {
       REQUIRES(Locks::jit_lock_)
       REQUIRES(Locks::mutator_lock_);
 
-  // Free code and data allocations for `code_ptr`.
-  void FreeCodeAndData(const void* code_ptr, bool free_debug_info = true)
+  // Call given callback for every compiled method in the code cache.
+  void VisitAllMethods(const std::function<void(const void*, ArtMethod*)>& cb)
       REQUIRES(Locks::jit_lock_);
+
+  // Free code and data allocations for `code_ptr`.
+  void FreeCodeAndData(const void* code_ptr)
+      REQUIRES(Locks::jit_lock_)
+      REQUIRES_SHARED(Locks::mutator_lock_);
 
   // Number of bytes allocated in the code cache.
   size_t CodeCacheSize() REQUIRES(!Locks::jit_lock_);
