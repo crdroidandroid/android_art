@@ -32,6 +32,7 @@
 #include "base/mem_map.h"
 #include "base/mutex.h"
 #include "base/safe_map.h"
+#include "compilation_kind.h"
 #include "jit_memory_region.h"
 
 namespace art {
@@ -195,9 +196,8 @@ class JitCodeCache {
 
   bool NotifyCompilationOf(ArtMethod* method,
                            Thread* self,
-                           bool osr,
+                           CompilationKind compilation_kind,
                            bool prejit,
-                           bool baseline,
                            JitMemoryRegion* region)
       REQUIRES_SHARED(Locks::mutator_lock_)
       REQUIRES(!Locks::jit_lock_);
@@ -214,7 +214,7 @@ class JitCodeCache {
       REQUIRES_SHARED(Locks::mutator_lock_)
       REQUIRES(!Locks::jit_lock_);
 
-  void DoneCompiling(ArtMethod* method, Thread* self, bool osr)
+  void DoneCompiling(ArtMethod* method, Thread* self, CompilationKind compilation_kind)
       REQUIRES_SHARED(Locks::mutator_lock_)
       REQUIRES(!Locks::jit_lock_);
 
@@ -268,7 +268,7 @@ class JitCodeCache {
               ArrayRef<const uint8_t> stack_map,      // Compiler output (source).
               const std::vector<uint8_t>& debug_info,
               bool is_full_debug_info,
-              bool osr,
+              CompilationKind compilation_kind,
               bool has_should_deoptimize_flag,
               const ArenaSet<ArtMethod*>& cha_single_implementation_list)
       REQUIRES_SHARED(Locks::mutator_lock_)
@@ -496,6 +496,21 @@ class JitCodeCache {
       REQUIRES(!Locks::jit_lock_)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
+  // Record that `method` is being compiled with the given mode.
+  void AddMethodBeingCompiled(ArtMethod* method, CompilationKind compilation_kind)
+      REQUIRES(Locks::jit_lock_);
+
+  // Remove `method` from the list of methods meing compiled with the given mode.
+  void RemoveMethodBeingCompiled(ArtMethod* method, CompilationKind compilation_kind)
+      REQUIRES(Locks::jit_lock_);
+
+  // Return whether `method` is being compiled with the given mode.
+  bool IsMethodBeingCompiled(ArtMethod* method, CompilationKind compilation_kind)
+      REQUIRES(Locks::jit_lock_);
+
+  // Return whether `method` is being compiled in any mode.
+  bool IsMethodBeingCompiled(ArtMethod* method) REQUIRES(Locks::jit_lock_);
+
   class JniStubKey;
   class JniStubData;
 
@@ -532,6 +547,11 @@ class JitCodeCache {
 
   // ProfilingInfo objects we have allocated.
   std::vector<ProfilingInfo*> profiling_infos_ GUARDED_BY(Locks::jit_lock_);
+
+  // Methods we are currently compiling, one set for each kind of compilation.
+  std::set<ArtMethod*> current_optimized_compilations_ GUARDED_BY(Locks::jit_lock_);
+  std::set<ArtMethod*> current_osr_compilations_ GUARDED_BY(Locks::jit_lock_);
+  std::set<ArtMethod*> current_baseline_compilations_ GUARDED_BY(Locks::jit_lock_);
 
   // Methods that the zygote has compiled and can be shared across processes
   // forked from the zygote.
