@@ -734,7 +734,8 @@ static jvmtiError DoIterateThroughHeap(T fn,
 
   bool stop_reports = false;
   const HeapFilter heap_filter(heap_filter_int);
-  art::ObjPtr<art::mirror::Class> filter_klass = soa.Decode<art::mirror::Class>(klass);
+  art::StackHandleScope<1> hs(self);
+  art::Handle<art::mirror::Class> filter_klass(hs.NewHandle(soa.Decode<art::mirror::Class>(klass)));
   auto visitor = [&](art::mirror::Object* obj) REQUIRES_SHARED(art::Locks::mutator_lock_) {
     // Early return, as we can't really stop visiting.
     if (stop_reports) {
@@ -756,7 +757,7 @@ static jvmtiError DoIterateThroughHeap(T fn,
     }
 
     if (filter_klass != nullptr) {
-      if (filter_klass != klass) {
+      if (filter_klass.Get() != klass) {
         return;
       }
     }
