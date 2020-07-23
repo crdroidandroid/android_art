@@ -25,7 +25,7 @@ import (
 	"github.com/google/blueprint/proptools"
 )
 
-var supportedArches = []string{"arm", "arm64", "mips", "mips64", "x86", "x86_64"}
+var supportedArches = []string{"arm", "arm64", "x86", "x86_64"}
 
 func globalFlags(ctx android.BaseContext) ([]string, []string) {
 	var cflags []string
@@ -87,16 +87,12 @@ func globalFlags(ctx android.BaseContext) ([]string, []string) {
 		cflags = append(cflags,
 			"-DART_STACK_OVERFLOW_GAP_arm=8192",
 			"-DART_STACK_OVERFLOW_GAP_arm64=8192",
-			"-DART_STACK_OVERFLOW_GAP_mips=16384",
-			"-DART_STACK_OVERFLOW_GAP_mips64=16384",
 			"-DART_STACK_OVERFLOW_GAP_x86=16384",
 			"-DART_STACK_OVERFLOW_GAP_x86_64=20480")
 	} else {
 		cflags = append(cflags,
 			"-DART_STACK_OVERFLOW_GAP_arm=8192",
 			"-DART_STACK_OVERFLOW_GAP_arm64=8192",
-			"-DART_STACK_OVERFLOW_GAP_mips=16384",
-			"-DART_STACK_OVERFLOW_GAP_mips64=16384",
 			"-DART_STACK_OVERFLOW_GAP_x86=8192",
 			"-DART_STACK_OVERFLOW_GAP_x86_64=8192")
 	}
@@ -105,11 +101,6 @@ func globalFlags(ctx android.BaseContext) ([]string, []string) {
 		// Used to enable full sanitization, i.e., user poisoning, under ASAN.
 		cflags = append(cflags, "-DART_ENABLE_ADDRESS_SANITIZER=1")
 		asflags = append(asflags, "-DART_ENABLE_ADDRESS_SANITIZER=1")
-	}
-
-	if envTrue(ctx, "ART_MIPS32_CHECK_ALIGNMENT") {
-		// Enable the use of MIPS32 CHECK_ALIGNMENT macro for debugging purposes
-		asflags = append(asflags, "-DART_MIPS32_CHECK_ALIGNMENT")
 	}
 
 	if envTrueOrDefault(ctx, "USE_D8_DESUGAR") {

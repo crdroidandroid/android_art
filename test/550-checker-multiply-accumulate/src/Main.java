@@ -424,16 +424,16 @@ public class Main {
     return - (left * right);
   }
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (before)
+  /// CHECK-START-ARM64: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (before)
   /// CHECK-DAG:     Phi                            loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG:     VecMul                         loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:     VecAdd                         loop:<<Loop>>      outer_loop:none
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (after)
+  /// CHECK-START-ARM64: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (after)
   /// CHECK-DAG:     Phi                            loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG:     VecMultiplyAccumulate kind:Add loop:<<Loop>>      outer_loop:none
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (after)
+  /// CHECK-START-ARM64: void Main.SimdMulAdd(int[], int[]) instruction_simplifier$after_bce (after)
   /// CHECK-NOT:     VecMul
   /// CHECK-NOT:     VecAdd
 
@@ -461,16 +461,16 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (before)
+  /// CHECK-START-ARM64: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (before)
   /// CHECK-DAG:     Phi                            loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG:     VecMul                         loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:     VecSub                         loop:<<Loop>>      outer_loop:none
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (after)
+  /// CHECK-START-ARM64: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (after)
   /// CHECK-DAG:     Phi                            loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG:     VecMultiplyAccumulate kind:Sub loop:<<Loop>>      outer_loop:none
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (after)
+  /// CHECK-START-ARM64: void Main.SimdMulSub(int[], int[]) instruction_simplifier$after_bce (after)
   /// CHECK-NOT:     VecMul
   /// CHECK-NOT:     VecSub
 
@@ -498,12 +498,12 @@ public class Main {
     }
   }
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulMultipleUses(int[], int[]) instruction_simplifier$after_bce (before)
+  /// CHECK-START-ARM64: void Main.SimdMulMultipleUses(int[], int[]) instruction_simplifier$after_bce (before)
   /// CHECK-DAG:     Phi                            loop:<<Loop:B\d+>> outer_loop:none
   /// CHECK-DAG:     VecMul                         loop:<<Loop>>      outer_loop:none
   /// CHECK-DAG:     VecSub                         loop:<<Loop>>      outer_loop:none
 
-  /// CHECK-START-{ARM64,MIPS64}: void Main.SimdMulMultipleUses(int[], int[]) instruction_simplifier$after_bce (after)
+  /// CHECK-START-ARM64: void Main.SimdMulMultipleUses(int[], int[]) instruction_simplifier$after_bce (after)
   /// CHECK-NOT: VecMultiplyAccumulate
 
   public static void SimdMulMultipleUses(int[] array1, int[] array2) {
