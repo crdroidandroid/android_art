@@ -410,6 +410,9 @@ libart_cc_defaults {
         "libnativehelper_header_only",
         "jni_platform_headers",
     ],
+    whole_static_libs: [
+        "libcpu_features",
+    ],
     shared_libs: [
         "libartpalette",
         "libnativebridge",
