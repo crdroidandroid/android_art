@@ -103,6 +103,12 @@ std::unique_ptr<const InstructionSetFeatures> InstructionSetFeatures::FromRuntim
 #ifdef ART_TARGET_ANDROID
     case InstructionSet::kArm64:
       return Arm64InstructionSetFeatures::FromHwcap();
+    case InstructionSet::kThumb2:
+      return ArmInstructionSetFeatures::FromCpuFeatures();
+    case InstructionSet::kX86:
+      return X86InstructionSetFeatures::FromCpuFeatures();
+    case InstructionSet::kX86_64:
+      return X86_64InstructionSetFeatures::FromCpuFeatures();
 #endif
     default:
       return nullptr;

@@ -88,9 +88,8 @@ class CommonCompilerTest : public CommonRuntimeTest {
 
   InstructionSet instruction_set_ =
       (kRuntimeISA == InstructionSet::kArm) ? InstructionSet::kThumb2 : kRuntimeISA;
-  // Take the default set of instruction features from the build.
   std::unique_ptr<const InstructionSetFeatures> instruction_set_features_
-      = InstructionSetFeatures::FromCppDefines();
+      = InstructionSetFeatures::FromCpuFeatures();
 
   std::unique_ptr<CompilerOptions> compiler_options_;
   std::unique_ptr<VerificationResults> verification_results_;

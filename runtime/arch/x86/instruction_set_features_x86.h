@@ -103,6 +103,19 @@ class X86InstructionSetFeatures : public InstructionSetFeatures {
   }
 
   std::unique_ptr<const InstructionSetFeatures>
+      AddRuntimeDetectedFeatures(const InstructionSetFeatures* features) const override {
+    const X86InstructionSetFeatures* x86_features = features->AsX86InstructionSetFeatures();
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new X86InstructionSetFeatures(x86_features->has_SSSE3_,
+                                      x86_features->has_SSE4_1_,
+                                      x86_features->has_SSE4_2_,
+                                      x86_features->has_AVX_,
+                                      x86_features->has_AVX2_,
+                                      x86_features->has_POPCNT_));
+  }
+
+
+  std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const std::vector<std::string>& features,
                                  bool x86_64,
                                  std::string* error_msg) const;
