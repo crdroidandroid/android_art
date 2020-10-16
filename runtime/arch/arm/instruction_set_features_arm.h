@@ -87,6 +87,17 @@ class ArmInstructionSetFeatures final : public InstructionSetFeatures {
       AddFeaturesFromSplitString(const std::vector<std::string>& features,
                                  std::string* error_msg) const override;
 
+  std::unique_ptr<const InstructionSetFeatures>
+      AddRuntimeDetectedFeatures(const InstructionSetFeatures* features) const override {
+    const ArmInstructionSetFeatures* arm_features = features->AsArmInstructionSetFeatures();
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new ArmInstructionSetFeatures(arm_features->has_div_,
+                                      arm_features->has_atomic_ldrd_strd_,
+                                      arm_features->has_armv8a_));
+  }
+
+
+
  private:
   ArmInstructionSetFeatures(bool has_div,
                             bool has_atomic_ldrd_strd,

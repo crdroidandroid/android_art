@@ -127,7 +127,7 @@ class MultiOatRelativePatcherTest : public testing::Test {
   };
 
   MultiOatRelativePatcherTest()
-      : instruction_set_features_(InstructionSetFeatures::FromCppDefines()),
+      : instruction_set_features_(InstructionSetFeatures::FromCpuFeatures()),
         patcher_(kRuntimeISA, instruction_set_features_.get(), /* storage */ nullptr) {
     std::unique_ptr<MockPatcher> mock(new MockPatcher());
     mock_ = mock.get();

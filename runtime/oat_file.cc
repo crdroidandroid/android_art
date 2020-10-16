@@ -1537,7 +1537,7 @@ class OatFileBackedByVdex final : public OatFileBase {
     // filter (it helps debugging and is required by
     // OatHeader::GetCompilerFilter).
     std::unique_ptr<const InstructionSetFeatures> isa_features =
-        InstructionSetFeatures::FromCppDefines();
+        InstructionSetFeatures::FromCpuFeatures();
     SafeMap<std::string, std::string> store;
     store.Put(OatHeader::kCompilerFilter, CompilerFilter::NameOfFilter(CompilerFilter::kVerify));
     oat_header_.reset(OatHeader::Create(kRuntimeISA,
