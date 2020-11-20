@@ -426,7 +426,7 @@ LOCAL_REQUIRED_MODULES := \
 # * Otherwise, we will add them by default to userdebug and eng builds.
 art_target_include_debug_build := $(PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD)
 ifneq (false,$(art_target_include_debug_build))
-ifneq (,$(filter userdebug eng,$(TARGET_BUILD_VARIANT)))
+ifneq (,$(filter eng,$(TARGET_BUILD_VARIANT)))
   art_target_include_debug_build := true
 endif
 ifeq (true,$(art_target_include_debug_build))
