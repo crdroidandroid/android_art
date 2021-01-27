@@ -55,6 +55,10 @@ void JitCompiler::ParseCompilerOptions() {
       UNREACHABLE();
     }
   }
+  // Set to appropriate JIT compiler type.
+  compiler_options_->compiler_type_ = runtime->IsZygote()
+      ? CompilerOptions::CompilerType::kSharedCodeJitCompiler
+      : CompilerOptions::CompilerType::kJitCompiler;
   // JIT is never PIC, no matter what the runtime compiler options specify.
   compiler_options_->SetNonPic();
 
@@ -102,12 +106,10 @@ void JitCompiler::ParseCompilerOptions() {
 
   if (instruction_set_features == nullptr) {
     // '--instruction-set-features/--instruction-set-variant' were not used.
-    // Use build-time defined features.
-    instruction_set_features = InstructionSetFeatures::FromCppDefines();
+    // Use features provided by the cpu_features library.
+    instruction_set_features = InstructionSetFeatures::FromCpuFeatures();
   }
   compiler_options_->instruction_set_features_ = std::move(instruction_set_features);
-  compiler_options_->compiling_with_core_image_ =
-      CompilerOptions::IsCoreImageFilename(runtime->GetImageLocation());
 
   if (compiler_options_->GetGenerateDebugInfo()) {
     jit_logger_.reset(new JitLogger());
@@ -163,10 +165,10 @@ JitCompiler::~JitCompiler() {
 }
 
 bool JitCompiler::CompileMethod(
-    Thread* self, JitMemoryRegion* region, ArtMethod* method, bool baseline, bool osr) {
+    Thread* self, JitMemoryRegion* region, ArtMethod* method, CompilationKind compilation_kind) {
   SCOPED_TRACE << "JIT compiling "
                << method->PrettyMethod()
-               << " (baseline=" << baseline << ", osr=" << osr << ")";
+               << " (kind=" << compilation_kind << ")";
 
   DCHECK(!method->IsProxyMethod());
   DCHECK(method->GetDeclaringClass()->IsResolved());
@@ -183,7 +185,7 @@ bool JitCompiler::CompileMethod(
     JitCodeCache* const code_cache = runtime->GetJit()->GetCodeCache();
     uint64_t start_ns = NanoTime();
     success = compiler_->JitCompile(
-        self, code_cache, region, method, baseline, osr, jit_logger_.get());
+        self, code_cache, region, method, compilation_kind, jit_logger_.get());
     uint64_t duration_ns = NanoTime() - start_ns;
     VLOG(jit) << "Compilation of "
               << method->PrettyMethod()

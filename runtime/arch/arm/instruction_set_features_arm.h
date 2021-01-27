@@ -47,6 +47,9 @@ class ArmInstructionSetFeatures final : public InstructionSetFeatures {
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
   static ArmFeaturesUniquePtr FromAssembly();
 
+  // Use external cpu_features library.
+  static ArmFeaturesUniquePtr FromCpuFeatures();
+
   bool Equals(const InstructionSetFeatures* other) const override;
 
   bool HasAtLeast(const InstructionSetFeatures* other) const override;
@@ -83,6 +86,17 @@ class ArmInstructionSetFeatures final : public InstructionSetFeatures {
   std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const std::vector<std::string>& features,
                                  std::string* error_msg) const override;
+
+  std::unique_ptr<const InstructionSetFeatures>
+      AddRuntimeDetectedFeatures(const InstructionSetFeatures* features) const override {
+    const ArmInstructionSetFeatures* arm_features = features->AsArmInstructionSetFeatures();
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new ArmInstructionSetFeatures(arm_features->has_div_,
+                                      arm_features->has_atomic_ldrd_strd_,
+                                      arm_features->has_armv8a_));
+  }
+
+
 
  private:
   ArmInstructionSetFeatures(bool has_div,

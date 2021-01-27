@@ -306,7 +306,8 @@ static bool IsAddConst2(HGraph* graph,
                         /*out*/ HInstruction** a,
                         /*out*/ HInstruction** b,
                         /*out*/ int64_t* c) {
-  if (IsAddConst(instruction, a, b, c) && *a != nullptr) {
+  // We want an actual add/sub and not the trivial case where {b: 0, c: 0}.
+  if (IsAddOrSub(instruction) && IsAddConst(instruction, a, b, c) && *a != nullptr) {
     if (*b == nullptr) {
       // Constant is usually already present, unless accumulated.
       *b = graph->GetConstant(instruction->GetType(), (*c));
@@ -430,7 +431,7 @@ static void PeelByCount(HLoopInformation* loop_info,
                         InductionVarRange* induction_range) {
   for (int i = 0; i < count; i++) {
     // Perform peeling.
-    PeelUnrollSimpleHelper helper(loop_info, induction_range);
+    LoopClonerSimpleHelper helper(loop_info, induction_range);
     helper.DoPeeling();
   }
 }
@@ -806,7 +807,7 @@ bool HLoopOptimization::TryUnrollingForBranchPenaltyReduction(LoopAnalysisInfo* 
 
     // Perform unrolling.
     HLoopInformation* loop_info = analysis_info->GetLoopInfo();
-    PeelUnrollSimpleHelper helper(loop_info, &induction_range_);
+    LoopClonerSimpleHelper helper(loop_info, &induction_range_);
     helper.DoUnrolling();
 
     // Remove the redundant loop check after unrolling.
@@ -831,7 +832,7 @@ bool HLoopOptimization::TryPeelingForLoopInvariantExitsElimination(LoopAnalysisI
 
   if (generate_code) {
     // Perform peeling.
-    PeelUnrollSimpleHelper helper(loop_info, &induction_range_);
+    LoopClonerSimpleHelper helper(loop_info, &induction_range_);
     helper.DoPeeling();
 
     // Statically evaluate loop check after peeling for loop invariant condition.
@@ -904,7 +905,7 @@ bool HLoopOptimization::TryPeelingAndUnrolling(LoopNode* node) {
   }
 
   // Run 'IsLoopClonable' the last as it might be time-consuming.
-  if (!PeelUnrollHelper::IsLoopClonable(loop_info)) {
+  if (!LoopClonerHelper::IsLoopClonable(loop_info)) {
     return false;
   }
 

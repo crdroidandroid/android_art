@@ -69,6 +69,9 @@ class X86InstructionSetFeatures : public InstructionSetFeatures {
   // InstructionSetFeatures. This works around kernel bugs in AT_HWCAP and /proc/cpuinfo.
   static X86FeaturesUniquePtr FromAssembly(bool x86_64 = false);
 
+  // Use external cpu_features library.
+  static X86FeaturesUniquePtr FromCpuFeatures(bool x86_64 = false);
+
   bool Equals(const InstructionSetFeatures* other) const override;
 
   bool HasAtLeast(const InstructionSetFeatures* other) const override;
@@ -98,6 +101,19 @@ class X86InstructionSetFeatures : public InstructionSetFeatures {
                                  std::string* error_msg) const override {
     return AddFeaturesFromSplitString(features, false, error_msg);
   }
+
+  std::unique_ptr<const InstructionSetFeatures>
+      AddRuntimeDetectedFeatures(const InstructionSetFeatures* features) const override {
+    const X86InstructionSetFeatures* x86_features = features->AsX86InstructionSetFeatures();
+    return std::unique_ptr<const InstructionSetFeatures>(
+        new X86InstructionSetFeatures(x86_features->has_SSSE3_,
+                                      x86_features->has_SSE4_1_,
+                                      x86_features->has_SSE4_2_,
+                                      x86_features->has_AVX_,
+                                      x86_features->has_AVX2_,
+                                      x86_features->has_POPCNT_));
+  }
+
 
   std::unique_ptr<const InstructionSetFeatures>
       AddFeaturesFromSplitString(const std::vector<std::string>& features,
