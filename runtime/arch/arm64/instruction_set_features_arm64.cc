@@ -61,6 +61,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
       "cortex-a57",
       "cortex-a72",
       "cortex-a73",
+      "kryo785",
   };
 
   static const char* arm64_variants_with_crc[] = {
