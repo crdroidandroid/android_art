@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <vector>
+#include <signal.h>
 
 #include "android-base/stringprintf.h"
 
@@ -195,6 +196,12 @@ static constexpr bool kLogAllGCs = false;
 // Use Max heap for 2 seconds, this is smaller than the usual 5s window since we don't want to leave
 // allocate with relaxed ergonomics for that long.
 static constexpr size_t kPostForkMaxHeapDurationMS = 2000;
+
+static uint64_t kGcBeginTime;
+static int kGcCount = 0;
+static int kGcMaxCount = 30;
+static constexpr uint64_t kGcIntervalTime = MsToNs(10000);
+static constexpr uint64_t kGcReserveSizeBytes = 10 * 1024 * 1024;
 
 #if defined(__LP64__) || !defined(ADDRESS_SANITIZER)
 // 300 MB (0x12c00000) - (default non-moving space capacity).
@@ -2652,6 +2659,11 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type,
                                                uint32_t requested_gc_num) {
   Thread* self = Thread::Current();
   Runtime* runtime = Runtime::Current();
+
+  uint64_t present_time = NanoTime();
+  std::string current_package = Runtime::Current()->GetProcessPackageName();
+
+
   // If the heap can't run the GC, silently fail and return that no GC was run.
   switch (gc_type) {
     case collector::kGcTypePartial: {
@@ -2706,6 +2718,27 @@ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type,
     ++self->GetStats()->gc_for_alloc_count;
   }
   const size_t bytes_allocated_before_gc = GetBytesAllocated();
+
+
+  if (!current_package.empty()) {
+     if (kGcCount == 0) {
+        kGcBeginTime = present_time;
+        kGcCount = 1;
+     } else if (present_time <= kGcBeginTime + kGcIntervalTime) {
+        // Heap memory exceeds 246M/502M 30 times in 10s,so memory leaks occurred.
+        if (bytes_allocated_before_gc >= growth_limit_ - kGcReserveSizeBytes
+                  && ++kGcCount >= kGcMaxCount) {
+           LOG(INFO) << "kill process: " << current_package
+             << " reason: memory leaks occurred.current heap memory: " << bytes_allocated_before_gc;
+           // Kill current process
+           kill(getpid(), SIGKILL);
+       }
+     } else {
+        kGcBeginTime = present_time;
+        kGcCount = 1;
+     }
+  }
+
 
   DCHECK_LT(gc_type, collector::kGcTypeMax);
   DCHECK_NE(gc_type, collector::kGcTypeNone);
