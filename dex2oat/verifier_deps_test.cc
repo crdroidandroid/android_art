@@ -59,6 +59,10 @@ class VerifierDepsCompilerCallbacks : public CompilerCallbacks {
 
 class VerifierDepsTest : public CommonCompilerDriverTest {
  public:
+  VerifierDepsTest() {
+    this->use_boot_image_ = true;  // Make the Runtime creation cheaper.
+  }
+
   void SetUpRuntimeOptions(RuntimeOptions* options) override {
     CommonCompilerTest::SetUpRuntimeOptions(options);
     callbacks_.reset(new VerifierDepsCompilerCallbacks());
