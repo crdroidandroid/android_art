@@ -24,6 +24,122 @@ public class Main {
         testObjectCopy();
         testOverlappingMoves();
         testFloatAndDouble();
+        testArrayCopyChar();
+    }
+
+    public static void testArrayCopyChar() {
+        testArrayCopyCharConstCase2();
+        testArrayCopyCharConstCase3();
+        testArrayCopyCharConstCase5();
+        testArrayCopyCharCase(0);
+        testArrayCopyCharCase(1);
+        testArrayCopyCharCase(3);
+        testArrayCopyCharCase(4);
+        testArrayCopyCharCase(5);
+        testArrayCopyCharCase(7);
+        testArrayCopyCharCase(15);
+        testArrayCopyCharCase(16);
+        testArrayCopyCharCase(17);
+        testArrayCopyCharCase(31);
+        testArrayCopyCharCase(32);
+        testArrayCopyCharCase(33);
+        testArrayCopyCharCase(63);
+        testArrayCopyCharCase(64);
+        testArrayCopyCharCase(65);
+        testArrayCopyCharCase(255);
+        testArrayCopyCharCase(513);
+        testArrayCopyCharCase(1025);
+    }
+
+    static final char SRC_CHAR_START = '1';
+    static final char DST_CHAR = '0';
+
+    public static char[] createCharArray(int size, char ch, boolean increment) {
+        char[] res = new char[size];
+        char charToAdd = ch;
+        for (int i = 0; i < size; ++i) {
+            if (increment) {
+                charToAdd = (char) ((int) charToAdd + 1);
+            }
+            res[i] = charToAdd;
+        }
+        return res;
+    }
+
+    public static boolean verifyCorrectness(char[] src, char[] dst, int copiedPrefixLength) {
+        boolean passed = true;
+        for (int i = 0; i < dst.length; ++i) {
+            if (i < copiedPrefixLength) {
+                // Check that we copied source array.
+                if (dst[i] != src[i]) {
+                    passed = false;
+                    break;
+                }
+            } else {
+                // Check that we didn't write more chars than necessary.
+                if (dst[i] != DST_CHAR) {
+                    passed = false;
+                    break;
+                }
+            }
+        }
+        return passed;
+    }
+
+    public static void testArrayCopyCharCase(int size) {
+        char[] src = createCharArray(size, SRC_CHAR_START, true);
+        char[] dst = createCharArray(2 * size, DST_CHAR, false);
+
+        System.arraycopy(src, 0, dst, 0, size);
+
+        boolean passed = verifyCorrectness(src, dst, size);
+        if (!passed) {
+            System.out.println("arraycopy(char) " + size + " failed");
+        } else {
+            System.out.println("arraycopy(char) " + size + " passed");
+        }
+    }
+
+    public static void testArrayCopyCharConstCase2() {
+        char[] src = createCharArray(2 * 2, SRC_CHAR_START, true);
+        char[] dst = createCharArray(4 * 2, DST_CHAR, false);
+
+        System.arraycopy(src, 0, dst, 0, 2);
+
+        boolean passed = verifyCorrectness(src, dst, 2);
+        if (!passed) {
+            System.out.println("arraycopy(char) const case 2 failed");
+        } else {
+            System.out.println("arraycopy(char) const case 2 passed");
+        }
+    }
+
+    public static void testArrayCopyCharConstCase3() {
+        char[] src = createCharArray(2 * 3, SRC_CHAR_START, true);
+        char[] dst = createCharArray(4 * 3, DST_CHAR, false);
+
+        System.arraycopy(src, 0, dst, 0, 3);
+
+        boolean passed = verifyCorrectness(src, dst, 3);
+        if (!passed) {
+            System.out.println("arraycopy(char) const case 3 failed");
+        } else {
+            System.out.println("arraycopy(char) const case 3 passed");
+        }
+    }
+
+    public static void testArrayCopyCharConstCase5() {
+        char[] src = createCharArray(2 * 5, SRC_CHAR_START, true);
+        char[] dst = createCharArray(4 * 5, DST_CHAR, false);
+
+        System.arraycopy(src, 0, dst, 0, 5);
+
+        boolean passed = verifyCorrectness(src, dst, 5);
+        if (!passed) {
+            System.out.println("arraycopy(char) const case 5 failed");
+        } else {
+            System.out.println("arraycopy(char) const case 5 passed");
+        }
     }
 
     public static void testObjectCopy() {
