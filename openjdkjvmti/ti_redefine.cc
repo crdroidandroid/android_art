@@ -1095,14 +1095,13 @@ bool Redefiner::ClassRedefinition::CheckClass() {
   // Check class name.
   // These should have been checked by the dexfile verifier on load.
   DCHECK_NE(def.class_idx_, art::dex::TypeIndex::Invalid()) << "Invalid type index";
-  const char* descriptor = dex_file_->GetTypeDescriptor(def.class_idx_);
-  DCHECK(descriptor != nullptr) << "Invalid dex file structure!";
+  const std::string_view descriptor = dex_file_->GetTypeDescriptorView(def.class_idx_);
   if (!current_class->DescriptorEquals(descriptor)) {
     std::string storage;
     RecordFailure(ERR(NAMES_DONT_MATCH),
                   StringPrintf("expected file to contain class called '%s' but found '%s'!",
                                current_class->GetDescriptor(&storage),
-                               descriptor));
+                               std::string(descriptor).c_str()));
     return false;
   }
   if (current_class->IsObjectClass()) {
@@ -1111,8 +1110,7 @@ bool Redefiner::ClassRedefinition::CheckClass() {
       return false;
     }
   } else {
-    const char* super_descriptor = dex_file_->GetTypeDescriptor(def.superclass_idx_);
-    DCHECK(descriptor != nullptr) << "Invalid dex file structure!";
+    const std::string_view super_descriptor = dex_file_->GetTypeDescriptorView(def.superclass_idx_);
     if (!current_class->GetSuperClass()->DescriptorEquals(super_descriptor)) {
       RecordFailure(ERR(UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED), "Superclass changed");
       return false;
@@ -1136,9 +1134,8 @@ bool Redefiner::ClassRedefinition::CheckClass() {
     // The order of interfaces is (barely) meaningful so we error if it changes.
     const art::DexFile& orig_dex_file = current_class->GetDexFile();
     for (uint32_t i = 0; i < interfaces->Size(); i++) {
-      if (strcmp(
-            dex_file_->GetTypeDescriptor(interfaces->GetTypeItem(i).type_idx_),
-            orig_dex_file.GetTypeDescriptor(current_interfaces->GetTypeItem(i).type_idx_)) != 0) {
+      if (dex_file_->GetTypeDescriptorView(interfaces->GetTypeItem(i).type_idx_) !=
+          orig_dex_file.GetTypeDescriptorView(current_interfaces->GetTypeItem(i).type_idx_)) {
         RecordFailure(ERR(UNSUPPORTED_REDEFINITION_HIERARCHY_CHANGED),
                       "Interfaces changed or re-ordered");
         return false;

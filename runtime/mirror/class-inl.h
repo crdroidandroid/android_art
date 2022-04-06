@@ -825,26 +825,26 @@ inline std::string_view Class::GetDescriptorView() {
   return GetDexFile().GetTypeDescriptorView(GetDexTypeIndex());
 }
 
-inline bool Class::DescriptorEquals(const char* match) {
+inline bool Class::DescriptorEquals(std::string_view match) {
   ObjPtr<mirror::Class> klass = this;
   while (klass->IsArrayClass()) {
-    if (match[0] != '[') {
+    if (UNLIKELY(match.empty()) || match[0] != '[') {
       return false;
     }
-    ++match;
+    match.remove_prefix(1u);
     // No read barrier needed, we're reading a chain of constant references for comparison
     // with null. Then we follow up below with reading constant references to read constant
     // primitive data in both proxy and non-proxy paths. See ReadBarrierOption.
     klass = klass->GetComponentType<kDefaultVerifyFlags, kWithoutReadBarrier>();
   }
   if (klass->IsPrimitive()) {
-    return strcmp(Primitive::Descriptor(klass->GetPrimitiveType()), match) == 0;
-  } else if (klass->IsProxyClass()) {
+    return match.length() == 1u && match[0] == Primitive::Descriptor(klass->GetPrimitiveType())[0];
+  } else if (UNLIKELY(klass->IsProxyClass())) {
     return klass->ProxyDescriptorEquals(match);
   } else {
     const DexFile& dex_file = klass->GetDexFile();
     const dex::TypeId& type_id = dex_file.GetTypeId(klass->GetDexTypeIndex());
-    return strcmp(dex_file.GetTypeDescriptor(type_id), match) == 0;
+    return dex_file.GetTypeDescriptorView(type_id) == match;
   }
 }
 

@@ -488,10 +488,9 @@ static jclass DexFile_defineClassNative(JNIEnv* env,
     return nullptr;
   }
   const std::string descriptor(DotToDescriptor(class_name.c_str()));
-  const size_t hash(ComputeModifiedUtf8Hash(descriptor.c_str()));
+  const size_t hash = ComputeModifiedUtf8Hash(descriptor);
   for (auto& dex_file : dex_files) {
-    const dex::ClassDef* dex_class_def =
-        OatDexFile::FindClassDef(*dex_file, descriptor.c_str(), hash);
+    const dex::ClassDef* dex_class_def = OatDexFile::FindClassDef(*dex_file, descriptor, hash);
     if (dex_class_def != nullptr) {
       ScopedObjectAccess soa(env);
       ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
@@ -507,6 +506,7 @@ static jclass DexFile_defineClassNative(JNIEnv* env,
       }
       ObjPtr<mirror::Class> result = class_linker->DefineClass(soa.Self(),
                                                                descriptor.c_str(),
+                                                               descriptor.length(),
                                                                hash,
                                                                class_loader,
                                                                *dex_file,

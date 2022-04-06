@@ -1757,7 +1757,7 @@ bool Class::ProxyDescriptorEquals(ObjPtr<mirror::Class> match) {
   return descriptor == match_descriptor;
 }
 
-bool Class::ProxyDescriptorEquals(const char* match) {
+bool Class::ProxyDescriptorEquals(std::string_view match) {
   DCHECK(IsProxyClass());
   std::string storage;
   const char* descriptor = GetDescriptor(&storage);

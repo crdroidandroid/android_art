@@ -2876,7 +2876,7 @@ ObjPtr<mirror::ObjectArray<mirror::StackTraceElement>> ClassLinker::AllocStackTr
 }
 
 ObjPtr<mirror::Class> ClassLinker::EnsureResolved(Thread* self,
-                                                  const char* descriptor,
+                                                  std::string_view descriptor,
                                                   ObjPtr<mirror::Class> klass) {
   DCHECK(klass != nullptr);
   if (kIsDebugBuild) {
@@ -2955,8 +2955,9 @@ ObjPtr<mirror::Class> ClassLinker::EnsureResolved(Thread* self,
 using ClassPathEntry = std::pair<const DexFile*, const dex::ClassDef*>;
 
 // Search a collection of DexFiles for a descriptor
-ClassPathEntry FindInClassPath(const char* descriptor,
-                               size_t hash, const std::vector<const DexFile*>& class_path) {
+ClassPathEntry FindInClassPath(std::string_view descriptor,
+                               size_t hash,
+                               const std::vector<const DexFile*>& class_path) {
   for (const DexFile* dex_file : class_path) {
     DCHECK(dex_file != nullptr);
     const dex::ClassDef* dex_class_def = OatDexFile::FindClassDef(*dex_file, descriptor, hash);
@@ -2989,15 +2990,18 @@ do {                                                                          \
 
 bool ClassLinker::FindClassInSharedLibraries(Thread* self,
                                              const char* descriptor,
+                                             size_t descriptor_length,
                                              size_t hash,
                                              Handle<mirror::ClassLoader> class_loader,
                                              /*out*/ ObjPtr<mirror::Class>* result) {
   ArtField* field = WellKnownClasses::dalvik_system_BaseDexClassLoader_sharedLibraryLoaders;
-  return FindClassInSharedLibrariesHelper(self, descriptor, hash, class_loader, field, result);
+  return FindClassInSharedLibrariesHelper(
+      self, descriptor, descriptor_length, hash, class_loader, field, result);
 }
 
 bool ClassLinker::FindClassInSharedLibrariesHelper(Thread* self,
                                                    const char* descriptor,
+                                                   size_t descriptor_length,
                                                    size_t hash,
                                                    Handle<mirror::ClassLoader> class_loader,
                                                    ArtField* field,
@@ -3014,7 +3018,8 @@ bool ClassLinker::FindClassInSharedLibrariesHelper(Thread* self,
   for (auto loader : shared_libraries.Iterate<mirror::ClassLoader>()) {
     temp_loader.Assign(loader);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBaseDexClassLoader(self, descriptor, hash, temp_loader, result),
+        FindClassInBaseDexClassLoader(
+            self, descriptor, descriptor_length, hash, temp_loader, result),
         *result,
         self);
   }
@@ -3023,22 +3028,27 @@ bool ClassLinker::FindClassInSharedLibrariesHelper(Thread* self,
 
 bool ClassLinker::FindClassInSharedLibrariesAfter(Thread* self,
                                                   const char* descriptor,
+                                                  size_t descriptor_length,
                                                   size_t hash,
                                                   Handle<mirror::ClassLoader> class_loader,
                                                   /*out*/ ObjPtr<mirror::Class>* result) {
   ArtField* field = WellKnownClasses::dalvik_system_BaseDexClassLoader_sharedLibraryLoadersAfter;
-  return FindClassInSharedLibrariesHelper(self, descriptor, hash, class_loader, field, result);
+  return FindClassInSharedLibrariesHelper(
+      self, descriptor, descriptor_length, hash, class_loader, field, result);
 }
 
 bool ClassLinker::FindClassInBaseDexClassLoader(Thread* self,
                                                 const char* descriptor,
+                                                size_t descriptor_length,
                                                 size_t hash,
                                                 Handle<mirror::ClassLoader> class_loader,
                                                 /*out*/ ObjPtr<mirror::Class>* result) {
   // Termination case: boot class loader.
   if (IsBootClassLoader(class_loader.Get())) {
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBootClassLoaderClassPath(self, descriptor, hash, result), *result, self);
+        FindClassInBootClassLoaderClassPath(self, descriptor, descriptor_length, hash, result),
+        *result,
+        self);
     return true;
   }
 
@@ -3052,19 +3062,21 @@ bool ClassLinker::FindClassInBaseDexClassLoader(Thread* self,
     StackHandleScope<1> hs(self);
     Handle<mirror::ClassLoader> h_parent(hs.NewHandle(class_loader->GetParent()));
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBaseDexClassLoader(self, descriptor, hash, h_parent, result),
+        FindClassInBaseDexClassLoader(self, descriptor, descriptor_length, hash, h_parent, result),
         *result,
         self);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInSharedLibraries(self, descriptor, hash, class_loader, result),
+        FindClassInSharedLibraries(self, descriptor, descriptor_length, hash, class_loader, result),
         *result,
         self);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBaseDexClassLoaderClassPath(self, descriptor, hash, class_loader, result),
+        FindClassInBaseDexClassLoaderClassPath(
+            self, descriptor, descriptor_length, hash, class_loader, result),
         *result,
         self);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInSharedLibrariesAfter(self, descriptor, hash, class_loader, result),
+        FindClassInSharedLibrariesAfter(
+            self, descriptor, descriptor_length, hash, class_loader, result),
         *result,
         self);
     // We did not find a class, but the class loader chain was recognized, so we
@@ -3079,17 +3091,21 @@ bool ClassLinker::FindClassInBaseDexClassLoader(Thread* self,
     //    - class loader dex files
     //    - parent
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBootClassLoaderClassPath(self, descriptor, hash, result), *result, self);
-    RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInSharedLibraries(self, descriptor, hash, class_loader, result),
+        FindClassInBootClassLoaderClassPath(self, descriptor, descriptor_length, hash, result),
         *result,
         self);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBaseDexClassLoaderClassPath(self, descriptor, hash, class_loader, result),
+        FindClassInSharedLibraries(self, descriptor, descriptor_length, hash, class_loader, result),
         *result,
         self);
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInSharedLibrariesAfter(self, descriptor, hash, class_loader, result),
+        FindClassInBaseDexClassLoaderClassPath(
+            self, descriptor, descriptor_length, hash, class_loader, result),
+        *result,
+        self);
+    RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
+        FindClassInSharedLibrariesAfter(
+            self, descriptor, descriptor_length, hash, class_loader, result),
         *result,
         self);
 
@@ -3097,7 +3113,7 @@ bool ClassLinker::FindClassInBaseDexClassLoader(Thread* self,
     StackHandleScope<1> hs(self);
     Handle<mirror::ClassLoader> h_parent(hs.NewHandle(class_loader->GetParent()));
     RETURN_IF_UNRECOGNIZED_OR_FOUND_OR_EXCEPTION(
-        FindClassInBaseDexClassLoader(self, descriptor, hash, h_parent, result),
+        FindClassInBaseDexClassLoader(self, descriptor, descriptor_length, hash, h_parent, result),
         *result,
         self);
     // We did not find a class, but the class loader chain was recognized, so we
@@ -3141,16 +3157,19 @@ ALWAYS_INLINE void FilterDexFileCaughtExceptions(Thread* self, ClassLinker* clas
 // If the class is found the method returns the resolved class. Otherwise it returns null.
 bool ClassLinker::FindClassInBootClassLoaderClassPath(Thread* self,
                                                       const char* descriptor,
+                                                      size_t descriptor_length,
                                                       size_t hash,
                                                       /*out*/ ObjPtr<mirror::Class>* result) {
-  ClassPathEntry pair = FindInClassPath(descriptor, hash, boot_class_path_);
+  std::string_view sv_descriptor(descriptor, descriptor_length);
+  ClassPathEntry pair = FindInClassPath(sv_descriptor, hash, boot_class_path_);
   if (pair.second != nullptr) {
-    ObjPtr<mirror::Class> klass = LookupClass(self, descriptor, hash, nullptr);
+    ObjPtr<mirror::Class> klass = LookupClass(self, sv_descriptor, hash, nullptr);
     if (klass != nullptr) {
-      *result = EnsureResolved(self, descriptor, klass);
+      *result = EnsureResolved(self, sv_descriptor, klass);
     } else {
       *result = DefineClass(self,
                             descriptor,
+                            descriptor_length,
                             hash,
                             ScopedNullHandle<mirror::ClassLoader>(),
                             *pair.first,
@@ -3168,6 +3187,7 @@ bool ClassLinker::FindClassInBootClassLoaderClassPath(Thread* self,
 bool ClassLinker::FindClassInBaseDexClassLoaderClassPath(
     Thread* self,
     const char* descriptor,
+    size_t descriptor_length,
     size_t hash,
     Handle<mirror::ClassLoader> class_loader,
     /*out*/ ObjPtr<mirror::Class>* result) {
@@ -3176,11 +3196,12 @@ bool ClassLinker::FindClassInBaseDexClassLoaderClassPath(
          IsDelegateLastClassLoader(class_loader))
       << "Unexpected class loader for descriptor " << descriptor;
 
+  std::string_view sv_descriptor(descriptor, descriptor_length);
   const DexFile* dex_file = nullptr;
   const dex::ClassDef* class_def = nullptr;
   ObjPtr<mirror::Class> ret;
   auto find_class_def = [&](const DexFile* cp_dex_file) REQUIRES_SHARED(Locks::mutator_lock_) {
-    const dex::ClassDef* cp_class_def = OatDexFile::FindClassDef(*cp_dex_file, descriptor, hash);
+    const dex::ClassDef* cp_class_def = OatDexFile::FindClassDef(*cp_dex_file, sv_descriptor, hash);
     if (cp_class_def != nullptr) {
       dex_file = cp_dex_file;
       class_def = cp_class_def;
@@ -3191,7 +3212,8 @@ bool ClassLinker::FindClassInBaseDexClassLoaderClassPath(
   VisitClassLoaderDexFiles(self, class_loader, find_class_def);
 
   if (class_def != nullptr) {
-    *result = DefineClass(self, descriptor, hash, class_loader, *dex_file, *class_def);
+    *result =
+        DefineClass(self, descriptor, descriptor_length, hash, class_loader, *dex_file, *class_def);
     if (UNLIKELY(*result == nullptr)) {
       CHECK(self->IsExceptionPending()) << descriptor;
       FilterDexFileCaughtExceptions(self, this);
@@ -3215,11 +3237,12 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
     // for primitive classes that aren't backed by dex files.
     return FindPrimitiveClass(descriptor[0]);
   }
-  const size_t hash = ComputeModifiedUtf8Hash(descriptor);
+  const std::string_view sv_descriptor(descriptor);
+  const size_t hash = ComputeModifiedUtf8Hash(sv_descriptor);
   // Find the class in the loaded classes table.
-  ObjPtr<mirror::Class> klass = LookupClass(self, descriptor, hash, class_loader.Get());
+  ObjPtr<mirror::Class> klass = LookupClass(self, sv_descriptor, hash, class_loader.Get());
   if (klass != nullptr) {
-    return EnsureResolved(self, descriptor, klass);
+    return EnsureResolved(self, sv_descriptor, klass);
   }
   // Class is not yet loaded.
   if (descriptor[0] != '[' && class_loader == nullptr) {
@@ -3228,6 +3251,7 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
     if (pair.second != nullptr) {
       return DefineClass(self,
                          descriptor,
+                         sv_descriptor.length(),
                          hash,
                          ScopedNullHandle<mirror::ClassLoader>(),
                          *pair.first,
@@ -3247,18 +3271,18 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
   if (descriptor[0] == '[') {
     result_ptr = CreateArrayClass(self, descriptor, hash, class_loader);
     DCHECK_EQ(result_ptr == nullptr, self->IsExceptionPending());
-    DCHECK(result_ptr == nullptr || result_ptr->DescriptorEquals(descriptor));
+    DCHECK(result_ptr == nullptr || result_ptr->DescriptorEquals(sv_descriptor));
     descriptor_equals = true;
   } else {
     ScopedObjectAccessUnchecked soa(self);
-    bool known_hierarchy =
-        FindClassInBaseDexClassLoader(self, descriptor, hash, class_loader, &result_ptr);
+    bool known_hierarchy = FindClassInBaseDexClassLoader(
+        self, descriptor, sv_descriptor.length(), hash, class_loader, &result_ptr);
     if (result_ptr != nullptr) {
       // The chain was understood and we found the class. We still need to add the class to
       // the class table to protect from racy programs that can try and redefine the path list
       // which would change the Class<?> returned for subsequent evaluation of const-class.
       DCHECK(known_hierarchy);
-      DCHECK(result_ptr->DescriptorEquals(descriptor));
+      DCHECK(result_ptr->DescriptorEquals(sv_descriptor));
       descriptor_equals = true;
     } else if (!self->IsExceptionPending()) {
       // Either the chain wasn't understood or the class wasn't found.
@@ -3287,15 +3311,14 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
       // when native code erroneously calls JNI GetFieldId() with signature "java/lang/String"
       // instead of "Ljava/lang/String;", the message below using the "dot" names would be
       // "class loader [...] returned class java.lang.String instead of java.lang.String".
-      size_t descriptor_length = strlen(descriptor);
       if (UNLIKELY(descriptor[0] != 'L') ||
-          UNLIKELY(descriptor[descriptor_length - 1] != ';') ||
-          UNLIKELY(memchr(descriptor + 1, '.', descriptor_length - 2) != nullptr)) {
+          UNLIKELY(descriptor[sv_descriptor.length() - 1] != ';') ||
+          UNLIKELY(memchr(descriptor + 1, '.', sv_descriptor.length() - 2) != nullptr)) {
         ThrowNoClassDefFoundError("Invalid descriptor: %s.", descriptor);
         return nullptr;
       }
 
-      std::string class_name_string(descriptor + 1, descriptor_length - 2);
+      std::string class_name_string(sv_descriptor.substr(1u, sv_descriptor.length() - 2u));
       std::replace(class_name_string.begin(), class_name_string.end(), '/', '.');
       if (known_hierarchy &&
           fast_class_not_found_exceptions_ &&
@@ -3325,7 +3348,7 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
           return nullptr;
         }
         // Check the name of the returned class.
-        descriptor_equals = (result_ptr != nullptr) && result_ptr->DescriptorEquals(descriptor);
+        descriptor_equals = (result_ptr != nullptr) && result_ptr->DescriptorEquals(sv_descriptor);
       }
     } else {
       DCHECK(!MatchesDexFileCaughtExceptions(self->GetException(), this));
@@ -3335,10 +3358,10 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
   if (self->IsExceptionPending()) {
     // If the ClassLoader threw or array class allocation failed, pass that exception up.
     // However, to comply with the RI behavior, first check if another thread succeeded.
-    result_ptr = LookupClass(self, descriptor, hash, class_loader.Get());
+    result_ptr = LookupClass(self, sv_descriptor, hash, class_loader.Get());
     if (result_ptr != nullptr && !result_ptr->IsErroneous()) {
       self->ClearException();
-      return EnsureResolved(self, descriptor, result_ptr);
+      return EnsureResolved(self, sv_descriptor, result_ptr);
     }
     return nullptr;
   }
@@ -3348,7 +3371,7 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
   {
     WriterMutexLock mu(self, *Locks::classlinker_classes_lock_);
     ClassTable* const class_table = InsertClassTableForClassLoader(class_loader.Get());
-    old = class_table->Lookup(descriptor, hash);
+    old = class_table->Lookup(sv_descriptor, hash);
     if (old == nullptr) {
       old = result_ptr;  // For the comparison below, after releasing the lock.
       if (descriptor_equals) {
@@ -3366,7 +3389,7 @@ ObjPtr<mirror::Class> ClassLinker::FindClass(Thread* self,
     LOG(WARNING) << "Initiating class loader of type " << DescriptorToDot(loader_class_name)
         << " is not well-behaved; it returned a different Class for racing loadClass(\""
         << DescriptorToDot(descriptor) << "\").";
-    return EnsureResolved(self, descriptor, old);
+    return EnsureResolved(self, sv_descriptor, old);
   }
   if (UNLIKELY(!descriptor_equals)) {
     std::string result_storage;
@@ -3430,10 +3453,12 @@ struct ScopedDefiningClass {
 
 ObjPtr<mirror::Class> ClassLinker::DefineClass(Thread* self,
                                                const char* descriptor,
+                                               size_t descriptor_length,
                                                size_t hash,
                                                Handle<mirror::ClassLoader> class_loader,
                                                const DexFile& dex_file,
                                                const dex::ClassDef& dex_class_def) {
+  std::string_view sv_descriptor(descriptor, descriptor_length);
   ScopedDefiningClass sdc(self);
   StackHandleScope<3> hs(self);
   metrics::AutoTimer timer{GetMetrics()->ClassLoadingTotalTime()};
@@ -3443,17 +3468,17 @@ ObjPtr<mirror::Class> ClassLinker::DefineClass(Thread* self,
   // Load the class from the dex file.
   if (UNLIKELY(!init_done_)) {
     // finish up init of hand crafted class_roots_
-    if (strcmp(descriptor, "Ljava/lang/Object;") == 0) {
+    if (sv_descriptor == "Ljava/lang/Object;") {
       klass.Assign(GetClassRoot<mirror::Object>(this));
-    } else if (strcmp(descriptor, "Ljava/lang/Class;") == 0) {
+    } else if (sv_descriptor == "Ljava/lang/Class;") {
       klass.Assign(GetClassRoot<mirror::Class>(this));
-    } else if (strcmp(descriptor, "Ljava/lang/String;") == 0) {
+    } else if (sv_descriptor == "Ljava/lang/String;") {
       klass.Assign(GetClassRoot<mirror::String>(this));
-    } else if (strcmp(descriptor, "Ljava/lang/ref/Reference;") == 0) {
+    } else if (sv_descriptor == "Ljava/lang/ref/Reference;") {
       klass.Assign(GetClassRoot<mirror::Reference>(this));
-    } else if (strcmp(descriptor, "Ljava/lang/DexCache;") == 0) {
+    } else if (sv_descriptor == "Ljava/lang/DexCache;") {
       klass.Assign(GetClassRoot<mirror::DexCache>(this));
-    } else if (strcmp(descriptor, "Ldalvik/system/ClassExt;") == 0) {
+    } else if (sv_descriptor == "Ldalvik/system/ClassExt;") {
       klass.Assign(GetClassRoot<mirror::ClassExt>(this));
     }
   }
@@ -3527,7 +3552,7 @@ ObjPtr<mirror::Class> ClassLinker::DefineClass(Thread* self,
 
   // Mark the string class by setting its access flag.
   if (UNLIKELY(!init_done_)) {
-    if (strcmp(descriptor, "Ljava/lang/String;") == 0) {
+    if (sv_descriptor == "Ljava/lang/String;") {
       klass->SetStringClass();
     }
   }
@@ -4715,7 +4740,7 @@ ObjPtr<mirror::Class> ClassLinker::FindPrimitiveClass(char type) {
   return result;
 }
 
-ObjPtr<mirror::Class> ClassLinker::InsertClass(const char* descriptor,
+ObjPtr<mirror::Class> ClassLinker::InsertClass(std::string_view descriptor,
                                                ObjPtr<mirror::Class> klass,
                                                size_t hash) {
   DCHECK(Thread::Current()->CanLoadClasses());
@@ -4768,13 +4793,13 @@ void ClassLinker::UpdateClassMethods(ObjPtr<mirror::Class> klass,
 }
 
 ObjPtr<mirror::Class> ClassLinker::LookupClass(Thread* self,
-                                               const char* descriptor,
+                                               std::string_view descriptor,
                                                ObjPtr<mirror::ClassLoader> class_loader) {
   return LookupClass(self, descriptor, ComputeModifiedUtf8Hash(descriptor), class_loader);
 }
 
 ObjPtr<mirror::Class> ClassLinker::LookupClass(Thread* self,
-                                               const char* descriptor,
+                                               std::string_view descriptor,
                                                size_t hash,
                                                ObjPtr<mirror::ClassLoader> class_loader) {
   ReaderMutexLock mu(self, *Locks::classlinker_classes_lock_);

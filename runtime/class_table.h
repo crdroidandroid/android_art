@@ -114,14 +114,15 @@ class ClassTable {
     static constexpr uint32_t kHashMask = kObjectAlignment - 1;
   };
 
-  using DescriptorHashPair = std::pair<const char*, uint32_t>;
+  using DescriptorHashPair = std::pair<std::string_view, uint32_t>;
 
   class ClassDescriptorHash {
    public:
     // uint32_t for cross compilation.
+    // NO_THREAD_SAFETY_ANALYSIS: Used from unannotated `HashSet<>` functions.
     uint32_t operator()(const TableSlot& slot) const NO_THREAD_SAFETY_ANALYSIS;
     // uint32_t for cross compilation.
-    uint32_t operator()(const DescriptorHashPair& pair) const NO_THREAD_SAFETY_ANALYSIS;
+    uint32_t operator()(const DescriptorHashPair& pair) const;
   };
 
   class ClassDescriptorEquals {
@@ -221,7 +222,7 @@ class ClassTable {
       REQUIRES_SHARED(Locks::mutator_lock_);
 
   // Return the first class that matches the descriptor. Returns null if there are none.
-  ObjPtr<mirror::Class> Lookup(const char* descriptor, size_t hash)
+  ObjPtr<mirror::Class> Lookup(std::string_view descriptor, size_t hash)
       REQUIRES(!lock_)
       REQUIRES_SHARED(Locks::mutator_lock_);
 

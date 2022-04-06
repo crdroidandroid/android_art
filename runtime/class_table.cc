@@ -104,7 +104,7 @@ size_t ClassTable::NumReferencedNonZygoteClasses() const {
   return classes_.back().size();
 }
 
-ObjPtr<mirror::Class> ClassTable::Lookup(const char* descriptor, size_t hash) {
+ObjPtr<mirror::Class> ClassTable::Lookup(std::string_view descriptor, size_t hash) {
   DescriptorHashPair pair(descriptor, hash);
   ReaderMutexLock mu(Thread::Current(), lock_);
   // Search from the last table, assuming that apps shall search for their own classes
