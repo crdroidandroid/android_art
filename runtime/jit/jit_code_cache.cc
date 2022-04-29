@@ -1594,21 +1594,16 @@ bool JitCodeCache::IsOsrCompiled(ArtMethod* method) {
 }
 
 void JitCodeCache::VisitRoots(RootVisitor* visitor) {
-  Thread* self = Thread::Current();
-  gc::Heap* const heap = Runtime::Current()->GetHeap();
-  if (heap->CurrentCollectorType() != gc::CollectorType::kCollectorTypeCMC
-      || !heap->MarkCompactCollector()->IsCompacting(self)) {
-    MutexLock mu(self, *Locks::jit_lock_);
-    UnbufferedRootVisitor root_visitor(visitor, RootInfo(kRootStickyClass));
-    for (ArtMethod* method : current_optimized_compilations_) {
-      method->VisitRoots(root_visitor, kRuntimePointerSize);
-    }
-    for (ArtMethod* method : current_baseline_compilations_) {
-      method->VisitRoots(root_visitor, kRuntimePointerSize);
-    }
-    for (ArtMethod* method : current_osr_compilations_) {
-      method->VisitRoots(root_visitor, kRuntimePointerSize);
-    }
+  MutexLock mu(Thread::Current(), *Locks::jit_lock_);
+  UnbufferedRootVisitor root_visitor(visitor, RootInfo(kRootStickyClass));
+  for (ArtMethod* method : current_optimized_compilations_) {
+    method->VisitRoots(root_visitor, kRuntimePointerSize);
+  }
+  for (ArtMethod* method : current_baseline_compilations_) {
+    method->VisitRoots(root_visitor, kRuntimePointerSize);
+  }
+  for (ArtMethod* method : current_osr_compilations_) {
+    method->VisitRoots(root_visitor, kRuntimePointerSize);
   }
 }
 
@@ -1618,7 +1613,9 @@ bool JitCodeCache::NotifyCompilationOf(ArtMethod* method,
                                        bool prejit) {
   if (kIsDebugBuild) {
     MutexLock mu(self, *Locks::jit_lock_);
-    CHECK(IsMethodBeingCompiled(method, compilation_kind));
+    // Note: the compilation kind may have been adjusted after what was passed initially.
+    // We really just want to check that the method is indeed being compiled.
+    CHECK(IsMethodBeingCompiled(method));
   }
   const void* existing_entry_point = method->GetEntryPointFromQuickCompiledCode();
   if (compilation_kind != CompilationKind::kOsr && ContainsPc(existing_entry_point)) {
