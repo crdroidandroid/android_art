@@ -118,7 +118,7 @@ void InitEntryPoints(JniEntryPoints* jpoints,
 
   // Intrinsics
   qpoints->SetStringCompareTo(art_quick_string_compareto);
-  qpoints->SetMemcpy(art_quick_memcpy);
+  qpoints->SetMemcpy(memcpy);
 
   // Read barrier.
   UpdateReadBarrierEntrypoints(qpoints, /*is_active=*/ false);
