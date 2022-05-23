@@ -153,7 +153,7 @@ using ArenaAllocatorStats = ArenaAllocatorStatsImpl<kArenaAllocatorCountAllocati
 
 class ArenaAllocatorMemoryTool {
  public:
-  bool IsRunningOnMemoryTool() { return kMemoryToolIsAvailable; }
+  static constexpr bool IsRunningOnMemoryTool() { return kMemoryToolIsAvailable; }
 
   void MakeDefined(void* ptr, size_t size) {
     if (UNLIKELY(IsRunningOnMemoryTool())) {
@@ -185,7 +185,7 @@ class Arena {
   void Reset();
   // Release is used inbetween uses and uses madvise for memory usage.
   virtual void Release() { }
-  uint8_t* Begin() {
+  uint8_t* Begin() const {
     return memory_;
   }
 
@@ -209,6 +209,8 @@ class Arena {
   bool Contains(const void* ptr) const {
     return memory_ <= ptr && ptr < memory_ + bytes_allocated_;
   }
+
+  Arena* Next() const { return next_; }
 
  protected:
   size_t bytes_allocated_;
@@ -356,6 +358,19 @@ class ArenaAllocator
     return pool_;
   }
 
+  Arena* GetHeadArena() const {
+    return arena_head_;
+  }
+
+  uint8_t* CurrentPtr() const {
+    return ptr_;
+  }
+
+  size_t CurrentArenaUnusedBytes() const {
+    DCHECK_LE(ptr_, end_);
+    return end_ - ptr_;
+  }
+
   bool Contains(const void* ptr) const;
 
   // The alignment guaranteed for individual allocations.
@@ -363,6 +378,9 @@ class ArenaAllocator
 
   // The alignment required for the whole Arena rather than individual allocations.
   static constexpr size_t kArenaAlignment = 16u;
+
+  // Extra bytes required by the memory tool.
+  static constexpr size_t kMemoryToolRedZoneBytes = 8u;
 
  private:
   void* AllocWithMemoryTool(size_t bytes, ArenaAllocKind kind);
