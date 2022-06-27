@@ -1711,16 +1711,8 @@ static void ReplaceStrongRoots(art::Thread* self, const ObjectMap& map)
           // Java frames might have the JIT doing optimizations (for example loop-unrolling or
           // eliding bounds checks) so we need deopt them once we're done here.
           if (info.GetType() == art::RootType::kRootJavaFrame) {
-            const art::JavaFrameRootInfo& jfri =
-                art::down_cast<const art::JavaFrameRootInfo&>(info);
-            if (jfri.GetVReg() == art::JavaFrameRootInfo::kMethodDeclaringClass) {
-              info.Describe(VLOG_STREAM(plugin) << "Not changing declaring-class during stack"
-                                                << " walk. Found obsolete java frame id ");
-              continue;
-            } else {
-              info.Describe(VLOG_STREAM(plugin) << "Found java frame id ");
-              threads_with_roots_.insert(info.GetThreadId());
-            }
+            VLOG_STREAM(plugin) << "Found java frame id " << info.GetThreadId();
+            threads_with_roots_.insert(info.GetThreadId());
           }
           *obj = it->second.Ptr();
         }
