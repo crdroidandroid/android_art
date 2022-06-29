@@ -1151,6 +1151,14 @@ class LSEVisitor final : private HGraphDelegateVisitor {
     }
   }
 
+  void VisitLoadMethodHandle(HLoadMethodHandle* load_method_handle) override {
+    HandleThrowingInstruction(load_method_handle);
+  }
+
+  void VisitLoadMethodType(HLoadMethodType* load_method_type) override {
+    HandleThrowingInstruction(load_method_type);
+  }
+
   void VisitStringBuilderAppend(HStringBuilderAppend* sb_append) override {
     HandleThrowingInstruction(sb_append);
   }
