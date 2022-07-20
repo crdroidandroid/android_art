@@ -780,7 +780,6 @@ void StackVisitor::WalkStack(bool include_transitions) {
     DCHECK(thread_ == Thread::Current() || thread_->IsSuspended());
   }
   CHECK_EQ(cur_depth_, 0U);
-  size_t inlined_frames_count = 0;
 
   for (const ManagedStack* current_fragment = thread_->GetManagedStack();
        current_fragment != nullptr; current_fragment = current_fragment->GetLink()) {
@@ -854,7 +853,6 @@ void StackVisitor::WalkStack(bool include_transitions) {
                 return;
               }
               cur_depth_++;
-              inlined_frames_count++;
             }
           }
         }
