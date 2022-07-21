@@ -671,11 +671,14 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
            "constant_folding$after_bce"),
     OptDef(OptimizationPass::kAggressiveInstructionSimplifier,
            "instruction_simplifier$after_bce"),
-    // Other high-level optimizations.
-    OptDef(OptimizationPass::kLoadStoreElimination),
-    OptDef(OptimizationPass::kCHAGuardOptimization),
     OptDef(OptimizationPass::kDeadCodeElimination,
            "dead_code_elimination$after_bce"),
+    // Other high-level optimizations.
+    OptDef(OptimizationPass::kLoadStoreElimination),
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$after_lse",
+           OptimizationPass::kLoadStoreElimination),
+    OptDef(OptimizationPass::kCHAGuardOptimization),
     OptDef(OptimizationPass::kCodeSinking),
     // The codegen has a few assumptions that only the instruction simplifier
     // can satisfy. For example, the code generator does not expect to see a

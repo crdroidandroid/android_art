@@ -2784,13 +2784,10 @@ public class Main {
   //            Induction variable:
   /// CHECK-DAG:                    Add [<<IndexPhi>>,<<Const2>>]              loop:<<Loop>>      outer_loop:none
   //            Array Element Addition:
-  /// CHECK-DAG: <<Store1:i\d+>>    Add [{{i\d+}},<<Const1>>]                  loop:<<Loop>>      outer_loop:none
-  /// CHECK-DAG:                    ArraySet [<<Param>>,<<Const0>>,<<Store1>>] loop:<<Loop>>      outer_loop:none
-  /// CHECK-DAG: <<Store2:i\d+>>    Add [{{i\d+}},<<Const1>>]                  loop:<<Loop>>      outer_loop:none
-  /// CHECK-DAG:                    ArraySet [<<Param>>,<<Const0>>,<<Store2>>] loop:<<Loop>>      outer_loop:none
+  /// CHECK-DAG: <<Store:i\d+>>     Add [{{i\d+}},<<Const2>>]                  loop:<<Loop>>      outer_loop:none
+  /// CHECK-DAG:                    ArraySet [<<Param>>,<<Const0>>,<<Store>>] loop:<<Loop>>      outer_loop:none
 
   /// CHECK-START: int Main.$noinline$deadAddAfterUnrollingAndSimplification(int[]) dead_code_elimination$before_codegen (after)
-  /// CHECK:                        Add
   /// CHECK:                        Add
   /// CHECK:                        Add
   /// CHECK-NOT:                    Add
