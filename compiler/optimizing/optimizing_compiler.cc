@@ -682,6 +682,11 @@ void OptimizingCompiler::RunOptimizations(HGraph* graph,
     // HTypeConversion from a type to the same type.
     OptDef(OptimizationPass::kAggressiveInstructionSimplifier,
            "instruction_simplifier$before_codegen"),
+    // Simplification may result in dead code that should be removed prior to
+    // code generation.
+    OptDef(OptimizationPass::kDeadCodeElimination,
+           "dead_code_elimination$before_codegen",
+           OptimizationPass::kAggressiveInstructionSimplifier),
     // Eliminate constructor fences after code sinking to avoid
     // complicated sinking logic to split a fence with many inputs.
     OptDef(OptimizationPass::kConstructorFenceRedundancyElimination)
