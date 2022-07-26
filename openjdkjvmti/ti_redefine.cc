@@ -1653,7 +1653,8 @@ bool Redefiner::ClassRedefinition::AllocateAndRememberNewDexFileCookie(
   bool has_older_cookie = false;
   // See if we already have a cookie that a previous redefinition got from the same classloader.
   for (auto old_data = cur_data->GetHolder().begin(); old_data != *cur_data; ++old_data) {
-    if (old_data.GetSourceClassLoader() == source_class_loader.Get()) {
+    if (old_data.GetSourceClassLoader() == source_class_loader.Get()
+        && old_data.GetJavaDexFile() == dex_file_obj.Get()) {
       // Since every instance of this classloader should have the same cookie associated with it we
       // can stop looking here.
       has_older_cookie = true;
