@@ -216,8 +216,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromCppDefines() {
   has_crc = true;
 #endif
 
-#if defined (__ARM_ARCH_8_1A__) || defined (__ARM_ARCH_8_2A__)
-  // There is no specific ACLE macro defined for ARMv8.1 LSE features.
+#if defined (__ARM_FEATURE_ATOMICS)
   has_lse = true;
 #endif
 
