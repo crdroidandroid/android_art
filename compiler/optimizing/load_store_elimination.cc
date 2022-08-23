@@ -3929,6 +3929,14 @@ void LSEVisitor::FinishFullLSE() {
     // location value.
     DCHECK_EQ(FindSubstitute(substitute), substitute);
 
+    // If the substitute is a NullCheck, fetch its input. This happens in occassions where we have a
+    // Set instruction recording the value of a field as the NullCheck. When replacing the
+    // instructions, we don't want to replace the Load with a NullCheck but with its input.
+    if (substitute->IsNullCheck()) {
+      substitute = substitute->InputAt(0);
+    }
+    DCHECK(substitute->GetBlock() != nullptr) << "The substitute should be alive.";
+
     load->ReplaceWith(substitute);
     load->GetBlock()->RemoveInstruction(load);
   }
