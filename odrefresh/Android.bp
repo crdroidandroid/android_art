@@ -55,6 +55,9 @@ cc_defaults {
         "-format-style=file",
         "-header-filter=(art/odrefresh/|system/apex/)",
     ],
+    lto: {
+        never: true,
+    },
 }
 
 cc_defaults {
