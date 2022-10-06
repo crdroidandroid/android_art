@@ -133,7 +133,7 @@ std::unique_ptr<const InstructionSetFeatures> InstructionSetFeatures::FromRuntim
   switch (kRuntimeISA) {
 #ifdef ART_TARGET_ANDROID
     case InstructionSet::kArm64:
-      return Arm64InstructionSetFeatures::FromHwcap();
+      return Arm64InstructionSetFeatures::FromHwcap()->IntersectWithHwcap();
 #endif
     default:
       return nullptr;
