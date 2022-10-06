@@ -828,6 +828,13 @@ class Dex2Oat final {
     if (compiler_options_->instruction_set_ == kRuntimeISA) {
       std::unique_ptr<const InstructionSetFeatures> runtime_features(
           InstructionSetFeatures::FromCppDefines());
+      if (kRuntimeISA == InstructionSet::kArm64) {
+         std::unique_ptr<const InstructionSetFeatures> arm64_runtime_features(
+             InstructionSetFeatures::FromRuntimeDetection());
+         if (arm64_runtime_features != nullptr) {
+           runtime_features = std::move(arm64_runtime_features);
+         }
+      }
       if (!compiler_options_->GetInstructionSetFeatures()->Equals(runtime_features.get())) {
         LOG(WARNING) << "Mismatch between dex2oat instruction set features to use ("
             << *compiler_options_->GetInstructionSetFeatures()
