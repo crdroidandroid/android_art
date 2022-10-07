@@ -180,13 +180,46 @@ void RuntimeCallbacks::RemoveThreadLifecycleCallback(ThreadLifecycleCallback* cb
   Remove(cb, &thread_callbacks_);
 }
 
+namespace {
+
+bool NeedsThreadCallbacks(Thread* self) {
+  // It isn't necessary for the listeners to know about the internal runtime threads.
+  // Some of the callbacks from GC / Shutdown threads are causing deadlocks because the
+  // deopt_manager currently needs a GCCriticalSection. See b/251163712 for details.
+  if (self->IsRuntimeThread()) {
+    return false;
+  }
+
+  // TODO(b/251163712): Remove this hack once the deopt_manager is fixed.
+  // This is a temporary hack to avoid deadlocks on jvmti threads. The correct fix would be to
+  // update deopt_manager to not require a GCCriticalSection but instead use a different scope
+  // where it is safe to read weak globals.
+  std::string name;
+  self->GetThreadName(name);
+  if (name.find("Shutdown thread") == 0) {
+    return false;
+  }
+
+  return true;
+}
+
+}  // namespace
+
 void RuntimeCallbacks::ThreadStart(Thread* self) {
+  if (!NeedsThreadCallbacks(self)) {
+    return;
+  }
+
   for (ThreadLifecycleCallback* cb : COPY(thread_callbacks_)) {
     cb->ThreadStart(self);
   }
 }
 
 void RuntimeCallbacks::ThreadDeath(Thread* self) {
+  if (!NeedsThreadCallbacks(self)) {
+    return;
+  }
+
   for (ThreadLifecycleCallback* cb : COPY(thread_callbacks_)) {
     cb->ThreadDeath(self);
   }
