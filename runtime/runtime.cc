@@ -3324,8 +3324,12 @@ void Runtime::SetJniIdType(JniIdType t) {
   WellKnownClasses::HandleJniIdTypeChange(Thread::Current()->GetJniEnv());
 }
 
+bool Runtime::IsSystemServerProfiled() const {
+  return IsSystemServer() && jit_options_->GetSaveProfilingInfo();
+}
+
 bool Runtime::GetOatFilesExecutable() const {
-  return !IsAotCompiler() && !(IsSystemServer() && jit_options_->GetSaveProfilingInfo());
+  return !IsAotCompiler() && !IsSystemServerProfiled();
 }
 
 void Runtime::ProcessWeakClass(GcRoot<mirror::Class>* root_ptr,
