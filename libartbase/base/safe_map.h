@@ -149,8 +149,13 @@ class SafeMap {
 
   template <typename CreateFn>
   V& GetOrCreate(const K& k, CreateFn create) {
+#if !defined(__cpp_lib_is_invocable) || __cpp_lib_is_invocable < 201703L
     static_assert(std::is_same_v<V, std::result_of_t<CreateFn()>>,
                   "Argument `create` should return a value of type V.");
+#else
+    static_assert(std::is_same_v<V, std::invoke_result_t<CreateFn>>,
+                  "Argument `create` should return a value of type V.");
+#endif
     auto lb = lower_bound(k);
     if (lb != end() && !key_comp()(k, lb->first)) {
       return lb->second;
