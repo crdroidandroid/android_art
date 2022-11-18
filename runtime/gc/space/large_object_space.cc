@@ -352,9 +352,7 @@ inline bool FreeListSpace::SortByPrevFree::operator()(const AllocationInfo* a,
                                                       const AllocationInfo* b) const {
   if (a->GetPrevFree() < b->GetPrevFree()) return true;
   if (a->GetPrevFree() > b->GetPrevFree()) return false;
-  if (a->AlignSize() < b->AlignSize()) return true;
-  if (a->AlignSize() > b->AlignSize()) return false;
-  return reinterpret_cast<uintptr_t>(a) < reinterpret_cast<uintptr_t>(b);
+  return std::less()(a, b);
 }
 
 FreeListSpace* FreeListSpace::Create(const std::string& name, size_t size) {
@@ -422,6 +420,44 @@ void FreeListSpace::RemoveFreePrev(AllocationInfo* info) {
   CHECK(it != free_blocks_.end());
   CHECK_EQ(*it, info);
   free_blocks_.erase(it);
+}
+
+size_t FreeListSpace::FreeList(Thread* self, size_t num_ptrs, mirror::Object** ptrs) {
+  size_t total = 0;
+  std::deque<AllocationInfo*> free_list;
+  AllocationInfo* clear_block_begin = nullptr;
+
+  {
+    MutexLock mu(self, lock_);
+    for (size_t i = 0; i < num_ptrs; ++i) {
+      if (kDebugSpaces) {
+        CHECK(Contains(ptrs[i]));
+      }
+
+      AllocationInfo* info = GetAllocationInfoForAddress(reinterpret_cast<uintptr_t>(ptrs[i]));
+      DCHECK(!info->IsFree());
+      if (clear_block_begin == nullptr) {
+        clear_block_begin = info;
+      } else if (clear_block_begin->GetNextInfo() == info) {
+        // Merge adjacent chunks.
+        const size_t allocation_size = info->ByteSize();
+        clear_block_begin->SetByteSize(clear_block_begin->ByteSize() + allocation_size, false);
+        info->SetByteSize(allocation_size, true);
+      } else {
+        free_list.emplace_back(clear_block_begin);
+        clear_block_begin = info;
+      }
+    }
+  }
+
+  if (clear_block_begin) {
+    free_list.emplace_back(clear_block_begin);
+  }
+
+  for (const auto& iter : free_list) {
+    total += Free(self, reinterpret_cast<mirror::Object*>(GetAddressForAllocationInfo(iter)));
+  }
+  return total;
 }
 
 size_t FreeListSpace::Free(Thread* self, mirror::Object* obj) {
