@@ -481,6 +481,9 @@ class HGraphVisualizerPrinter : public HGraphDelegateVisitor {
     StartAttributeStream("needs_type_check") << std::boolalpha
         << array_set->NeedsTypeCheck() << std::noboolalpha;
     StartAttributeStream("write_barrier_kind") << array_set->GetWriteBarrierKind();
+    StartAttributeStream("can_trigger_gc")
+        << std::boolalpha << array_set->GetSideEffects().Includes(SideEffects::CanTriggerGC())
+        << std::noboolalpha;
   }
 
   void VisitCompare(HCompare* compare) override {
