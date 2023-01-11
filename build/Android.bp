@@ -48,6 +48,7 @@ art_clang_tidy_allowed = [
     "modernize-use-using",
     "performance-faster-string-find",
     "performance-for-range-copy",
+    "performance-inefficient-vector-operation",
     "performance-noexcept-move-constructor",
     "performance-unnecessary-value-param",
 ]
