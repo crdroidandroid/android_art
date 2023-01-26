@@ -67,6 +67,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
       "default",
       "generic",
       "cortex-a35",
+      "cortex-a510",
       "cortex-a53",
       "cortex-a53.a57",
       "cortex-a53.a72",
@@ -85,6 +86,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
   };
 
   static const char* arm64_variants_with_lse[] = {
+      "cortex-a510",
       "cortex-a55",
       "cortex-a75",
       "cortex-a76",
@@ -93,6 +95,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
   };
 
   static const char* arm64_variants_with_fp16[] = {
+      "cortex-a510",
       "cortex-a55",
       "cortex-a75",
       "cortex-a76",
@@ -101,6 +104,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
   };
 
   static const char* arm64_variants_with_dotprod[] = {
+      "cortex-a510",
       "cortex-a55",
       "cortex-a75",
       "cortex-a76",
@@ -136,6 +140,7 @@ Arm64FeaturesUniquePtr Arm64InstructionSetFeatures::FromVariant(
     // variants which do *not* need a fix for a53 erratum 835769.
     static const char* other_arm64_known_variants[] = {
         "cortex-a35",
+        "cortex-a510",
         "cortex-a55",
         "cortex-a75",
         "cortex-a76",
