@@ -18,6 +18,7 @@
 #define ART_RUNTIME_ARCH_ARM64_ASM_SUPPORT_ARM64_H_
 
 #include "asm_support.h"
+#include "entrypoints/entrypoint_asm_constants.h"
 
 #define CALLEE_SAVES_SIZE (12 * 8 + 8 * 8)
 // +8 for the ArtMethod, +8 for alignment.
