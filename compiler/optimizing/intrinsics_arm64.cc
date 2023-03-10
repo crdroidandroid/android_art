@@ -2576,9 +2576,9 @@ void IntrinsicCodeGeneratorARM64::VisitStringGetCharsNoCheck(HInvoke* invoke) {
   __ Bind(&done);
 }
 
-// This value is greater than ARRAYCOPY_SHORT_CHAR_ARRAY_THRESHOLD in libcore,
-// so if we choose to jump to the slow path we will end up in the native implementation.
-static constexpr int32_t kSystemArrayCopyCharThreshold = 192;
+// Mirrors ARRAYCOPY_SHORT_CHAR_ARRAY_THRESHOLD in libcore, so we can choose to use the native
+// implementation there for longer copy lengths.
+static constexpr int32_t kSystemArrayCopyCharThreshold = 32;
 
 static void SetSystemArrayCopyLocationRequires(LocationSummary* locations,
                                                uint32_t at,
@@ -2745,14 +2745,13 @@ void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopyChar(HInvoke* invoke) {
   if (!length.IsConstant()) {
     // Merge the following two comparisons into one:
     //   If the length is negative, bail out (delegate to libcore's native implementation).
-    //   If the length > kSystemArrayCopyCharThreshold then (currently) prefer libcore's
-    //   native implementation.
+    //   If the length > 32 then (currently) prefer libcore's native implementation.
     __ Cmp(WRegisterFrom(length), kSystemArrayCopyCharThreshold);
     __ B(slow_path->GetEntryLabel(), hi);
   } else {
     // We have already checked in the LocationsBuilder for the constant case.
     DCHECK_GE(length.GetConstant()->AsIntConstant()->GetValue(), 0);
-    DCHECK_LE(length.GetConstant()->AsIntConstant()->GetValue(), kSystemArrayCopyCharThreshold);
+    DCHECK_LE(length.GetConstant()->AsIntConstant()->GetValue(), 32);
   }
 
   Register src_curr_addr = WRegisterFrom(locations->GetTemp(0));
@@ -2793,53 +2792,14 @@ void IntrinsicCodeGeneratorARM64::VisitSystemArrayCopyChar(HInvoke* invoke) {
   // Iterate over the arrays and do a raw copy of the chars.
   const int32_t char_size = DataType::Size(DataType::Type::kUint16);
   UseScratchRegisterScope temps(masm);
-
-  // We split processing of the array in two parts: head and tail.
-  // First loop with a bigger step (chars_per_block) handles the head and second loop
-  // with one byte step handles the tail.
-  // In order to not overstep we subtract len_offset (equals to chars_per_block-1)
-  // from the length and use this value as our length for the first loop.
-  // This ensures that the first loop will always stop before the end of the array.
-  const int chars_per_block = 4;
-  const int len_offset = chars_per_block - 1;
-  vixl::aarch64::Label loop1, loop2, pre_loop2, done;
-
-  Register length_tmp = src_stop_addr.W();
-  bool emitFirstLoop = false;
-  if (length.IsConstant()) {
-    int32_t constant = length.GetConstant()->AsIntConstant()->GetValue();
-    if (constant >= chars_per_block) {
-      emitFirstLoop = true;
-    }
-    __ Mov(length_tmp, constant - len_offset);
-  } else {
-    emitFirstLoop = true;
-    Register length_reg = WRegisterFrom(length);
-    __ Subs(length_tmp, length_reg, len_offset);
-    __ B(&pre_loop2, le);
-  }
-
-  Register tmp = temps.AcquireRegisterOfSize(char_size * chars_per_block * kBitsPerByte);
-  if (emitFirstLoop) {
-    // loop 1
-    __ Bind(&loop1);
-    __ Ldr(tmp, MemOperand(src_curr_addr, char_size * chars_per_block, PostIndex));
-    __ Subs(length_tmp, length_tmp, chars_per_block);
-    __ Str(tmp, MemOperand(dst_curr_addr, char_size * chars_per_block, PostIndex));
-    __ B(&loop1, gt);
-  }
-
-  __ Bind(&pre_loop2);
-  __ Adds(length_tmp, length_tmp, len_offset);
+  Register tmp = temps.AcquireW();
+  vixl::aarch64::Label loop, done;
+  __ Bind(&loop);
+  __ Cmp(src_curr_addr, src_stop_addr);
   __ B(&done, eq);
-
-  // loop2
-  __ Bind(&loop2);
   __ Ldrh(tmp, MemOperand(src_curr_addr, char_size, PostIndex));
-  __ Subs(length_tmp, length_tmp, 1);
   __ Strh(tmp, MemOperand(dst_curr_addr, char_size, PostIndex));
-  __ B(&loop2, gt);
-
+  __ B(&loop);
   __ Bind(&done);
 
   __ Bind(slow_path->GetExitLabel());
