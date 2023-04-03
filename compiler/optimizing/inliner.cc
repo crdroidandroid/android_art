@@ -175,7 +175,7 @@ bool HInliner::Run() {
       HInstruction* next = instruction->GetNext();
       HInvoke* call = instruction->AsInvoke();
       // As long as the call is not intrinsified, it is worth trying to inline.
-      if (call != nullptr && call->GetIntrinsic() == Intrinsics::kNone) {
+      if (call != nullptr && !codegen_->IsImplementedIntrinsic(call)) {
         if (honor_noinline_directives) {
           // Debugging case: directives in method names control or assert on inlining.
           std::string callee_name =
@@ -1250,6 +1250,13 @@ bool HInliner::TryDevirtualize(HInvoke* invoke_instruction,
     return false;
   }
 
+  // Don't try to devirtualize intrinsics as it breaks pattern matching from later phases.
+  // TODO(solanes): This `if` could be removed if we update optimizations like
+  // TryReplaceStringBuilderAppend.
+  if (invoke_instruction->IsIntrinsic()) {
+    return false;
+  }
+
   // Don't bother trying to call directly a default conflict method. It
   // doesn't have a proper MethodReference, but also `GetCanonicalMethod`
   // will return an actual default implementation.
@@ -1321,7 +1328,7 @@ bool HInliner::TryInlineAndReplace(HInvoke* invoke_instruction,
                                    ArtMethod* method,
                                    ReferenceTypeInfo receiver_type,
                                    bool do_rtp) {
-  DCHECK(!invoke_instruction->IsIntrinsic());
+  DCHECK(!codegen_->IsImplementedIntrinsic(invoke_instruction));
   HInstruction* return_replacement = nullptr;
 
   if (!TryBuildAndInline(invoke_instruction, method, receiver_type, &return_replacement)) {
