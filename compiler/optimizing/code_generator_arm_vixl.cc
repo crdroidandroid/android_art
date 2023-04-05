@@ -1845,7 +1845,7 @@ static Location Arm8BitEncodableConstantOrRegister(HInstruction* constant) {
   DCHECK(!DataType::IsFloatingPointType(constant->GetType()));
 
   if (constant->IsConstant() && CanEncodeConstantAs8BitImmediate(constant->AsConstant())) {
-    return Location::ConstantLocation(constant->AsConstant());
+    return Location::ConstantLocation(constant);
   }
 
   return Location::RequiresRegister();
@@ -4545,10 +4545,11 @@ void LocationsBuilderARMVIXL::VisitDiv(HDiv* div) {
 
   switch (div->GetResultType()) {
     case DataType::Type::kInt32: {
-      if (div->InputAt(1)->IsConstant()) {
+      HInstruction* divisor = div->InputAt(1);
+      if (divisor->IsConstant()) {
         locations->SetInAt(0, Location::RequiresRegister());
-        locations->SetInAt(1, Location::ConstantLocation(div->InputAt(1)->AsConstant()));
-        int32_t value = Int32ConstantFrom(div->InputAt(1));
+        locations->SetInAt(1, Location::ConstantLocation(divisor));
+        int32_t value = Int32ConstantFrom(divisor);
         Location::OutputOverlap out_overlaps = Location::kNoOutputOverlap;
         if (value == 1 || value == 0 || value == -1) {
           // No temp register required.
@@ -4662,10 +4663,11 @@ void LocationsBuilderARMVIXL::VisitRem(HRem* rem) {
 
   switch (type) {
     case DataType::Type::kInt32: {
-      if (rem->InputAt(1)->IsConstant()) {
+      HInstruction* divisor = rem->InputAt(1);
+      if (divisor->IsConstant()) {
         locations->SetInAt(0, Location::RequiresRegister());
-        locations->SetInAt(1, Location::ConstantLocation(rem->InputAt(1)->AsConstant()));
-        int32_t value = Int32ConstantFrom(rem->InputAt(1));
+        locations->SetInAt(1, Location::ConstantLocation(divisor));
+        int32_t value = Int32ConstantFrom(divisor);
         Location::OutputOverlap out_overlaps = Location::kNoOutputOverlap;
         if (value == 1 || value == 0 || value == -1) {
           // No temp register required.
@@ -5218,17 +5220,18 @@ void InstructionCodeGeneratorARMVIXL::HandleLongRotate(HRor* ror) {
 void LocationsBuilderARMVIXL::VisitRor(HRor* ror) {
   LocationSummary* locations =
       new (GetGraph()->GetAllocator()) LocationSummary(ror, LocationSummary::kNoCall);
+  HInstruction* shift = ror->InputAt(1);
   switch (ror->GetResultType()) {
     case DataType::Type::kInt32: {
       locations->SetInAt(0, Location::RequiresRegister());
-      locations->SetInAt(1, Location::RegisterOrConstant(ror->InputAt(1)));
+      locations->SetInAt(1, Location::RegisterOrConstant(shift));
       locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
       break;
     }
     case DataType::Type::kInt64: {
       locations->SetInAt(0, Location::RequiresRegister());
-      if (ror->InputAt(1)->IsConstant()) {
-        locations->SetInAt(1, Location::ConstantLocation(ror->InputAt(1)->AsConstant()));
+      if (shift->IsConstant()) {
+        locations->SetInAt(1, Location::ConstantLocation(shift));
       } else {
         locations->SetInAt(1, Location::RequiresRegister());
         locations->AddTemp(Location::RequiresRegister());
@@ -5265,11 +5268,12 @@ void LocationsBuilderARMVIXL::HandleShift(HBinaryOperation* op) {
   LocationSummary* locations =
       new (GetGraph()->GetAllocator()) LocationSummary(op, LocationSummary::kNoCall);
 
+  HInstruction* shift = op->InputAt(1);
   switch (op->GetResultType()) {
     case DataType::Type::kInt32: {
       locations->SetInAt(0, Location::RequiresRegister());
-      if (op->InputAt(1)->IsConstant()) {
-        locations->SetInAt(1, Location::ConstantLocation(op->InputAt(1)->AsConstant()));
+      if (shift->IsConstant()) {
+        locations->SetInAt(1, Location::ConstantLocation(shift));
         locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
       } else {
         locations->SetInAt(1, Location::RequiresRegister());
@@ -5281,8 +5285,8 @@ void LocationsBuilderARMVIXL::HandleShift(HBinaryOperation* op) {
     }
     case DataType::Type::kInt64: {
       locations->SetInAt(0, Location::RequiresRegister());
-      if (op->InputAt(1)->IsConstant()) {
-        locations->SetInAt(1, Location::ConstantLocation(op->InputAt(1)->AsConstant()));
+      if (shift->IsConstant()) {
+        locations->SetInAt(1, Location::ConstantLocation(shift));
         // For simplicity, use kOutputOverlap even though we only require that low registers
         // don't clash with high registers which the register allocator currently guarantees.
         locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
@@ -6018,7 +6022,7 @@ Location LocationsBuilderARMVIXL::ArithmeticZeroOrFpuRegister(HInstruction* inpu
   DCHECK(DataType::IsFloatingPointType(input->GetType())) << input->GetType();
   if ((input->IsFloatConstant() && (input->AsFloatConstant()->IsArithmeticZero())) ||
       (input->IsDoubleConstant() && (input->AsDoubleConstant()->IsArithmeticZero()))) {
-    return Location::ConstantLocation(input->AsConstant());
+    return Location::ConstantLocation(input);
   } else {
     return Location::RequiresFpuRegister();
   }
@@ -6029,7 +6033,7 @@ Location LocationsBuilderARMVIXL::ArmEncodableConstantOrRegister(HInstruction* c
   DCHECK(!DataType::IsFloatingPointType(constant->GetType()));
   if (constant->IsConstant() &&
       CanEncodeConstantAsImmediate(constant->AsConstant(), opcode)) {
-    return Location::ConstantLocation(constant->AsConstant());
+    return Location::ConstantLocation(constant);
   }
   return Location::RequiresRegister();
 }
@@ -7080,10 +7084,10 @@ void LocationsBuilderARMVIXL::VisitBoundsCheck(HBoundsCheck* instruction) {
   // locations.
   bool both_const = index->IsConstant() && length->IsConstant();
   locations->SetInAt(0, both_const
-      ? Location::ConstantLocation(index->AsConstant())
+      ? Location::ConstantLocation(index)
       : ArmEncodableConstantOrRegister(index, CMP));
   locations->SetInAt(1, both_const
-      ? Location::ConstantLocation(length->AsConstant())
+      ? Location::ConstantLocation(length)
       : ArmEncodableConstantOrRegister(length, CMP));
 }
 
@@ -7943,9 +7947,9 @@ void LocationsBuilderARMVIXL::VisitInstanceOf(HInstanceOf* instruction) {
   }
   locations->SetInAt(0, Location::RequiresRegister());
   if (type_check_kind == TypeCheckKind::kBitstringCheck) {
-    locations->SetInAt(1, Location::ConstantLocation(instruction->InputAt(1)->AsConstant()));
-    locations->SetInAt(2, Location::ConstantLocation(instruction->InputAt(2)->AsConstant()));
-    locations->SetInAt(3, Location::ConstantLocation(instruction->InputAt(3)->AsConstant()));
+    locations->SetInAt(1, Location::ConstantLocation(instruction->InputAt(1)));
+    locations->SetInAt(2, Location::ConstantLocation(instruction->InputAt(2)));
+    locations->SetInAt(3, Location::ConstantLocation(instruction->InputAt(3)));
   } else {
     locations->SetInAt(1, Location::RequiresRegister());
   }
@@ -8240,9 +8244,9 @@ void LocationsBuilderARMVIXL::VisitCheckCast(HCheckCast* instruction) {
       new (GetGraph()->GetAllocator()) LocationSummary(instruction, call_kind);
   locations->SetInAt(0, Location::RequiresRegister());
   if (type_check_kind == TypeCheckKind::kBitstringCheck) {
-    locations->SetInAt(1, Location::ConstantLocation(instruction->InputAt(1)->AsConstant()));
-    locations->SetInAt(2, Location::ConstantLocation(instruction->InputAt(2)->AsConstant()));
-    locations->SetInAt(3, Location::ConstantLocation(instruction->InputAt(3)->AsConstant()));
+    locations->SetInAt(1, Location::ConstantLocation(instruction->InputAt(1)));
+    locations->SetInAt(2, Location::ConstantLocation(instruction->InputAt(2)));
+    locations->SetInAt(3, Location::ConstantLocation(instruction->InputAt(3)));
   } else {
     locations->SetInAt(1, Location::RequiresRegister());
   }
