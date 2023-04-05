@@ -586,7 +586,7 @@ inline std::ostream& operator<<(std::ostream& oss, const AdjacencyListGraph& alg
   return alg.Dump(oss);
 }
 
-class PatternMatchGraphVisitor : public HGraphVisitor {
+class PatternMatchGraphVisitor final : public HGraphVisitor {
  private:
   struct HandlerWrapper {
    public:

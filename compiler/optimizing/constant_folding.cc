@@ -26,7 +26,7 @@ namespace art {
 
 // This visitor tries to simplify instructions that can be evaluated
 // as constants.
-class HConstantFoldingVisitor : public HGraphDelegateVisitor {
+class HConstantFoldingVisitor final : public HGraphDelegateVisitor {
  public:
   explicit HConstantFoldingVisitor(HGraph* graph, OptimizingCompilerStats* stats)
       : HGraphDelegateVisitor(graph, stats) {}

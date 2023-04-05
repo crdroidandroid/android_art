@@ -41,7 +41,7 @@ static inline ObjPtr<mirror::DexCache> FindDexCacheWithHint(
   }
 }
 
-class ReferenceTypePropagation::RTPVisitor : public HGraphDelegateVisitor {
+class ReferenceTypePropagation::RTPVisitor final : public HGraphDelegateVisitor {
  public:
   RTPVisitor(HGraph* graph,
              Handle<mirror::ClassLoader> class_loader,
