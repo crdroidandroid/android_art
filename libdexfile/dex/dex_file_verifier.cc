@@ -1740,6 +1740,10 @@ bool DexFileVerifier::CheckIntraDebugInfoItem() {
   }
 
   while (true) {
+    if (UNLIKELY(ptr_ >= begin_ + size_)) {
+      // Went past the end.
+      return false;
+    }
     uint8_t opcode = *(ptr_++);
     switch (opcode) {
       case DexFile::DBG_END_SEQUENCE: {
