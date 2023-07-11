@@ -276,6 +276,8 @@ art_module_art_global_defaults {
     ],
 
     min_sdk_version: "31",
+
+    whole_program_vtables: true,
 }
 
 // Used to generate binaries that can be backed by transparent hugepages.
