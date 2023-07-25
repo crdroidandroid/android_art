@@ -7010,17 +7010,15 @@ class HLoadClass final : public HInstruction {
   bool CanCallRuntime() const {
     return NeedsAccessCheck() ||
            MustGenerateClinitCheck() ||
-           GetLoadKind() == LoadKind::kRuntimeCall ||
-           GetLoadKind() == LoadKind::kBssEntry;
+           NeedsBss() ||
+           GetLoadKind() == LoadKind::kRuntimeCall;
   }
 
   bool CanThrow() const override {
     return NeedsAccessCheck() ||
            MustGenerateClinitCheck() ||
            // If the class is in the boot image, the lookup in the runtime call cannot throw.
-           ((GetLoadKind() == LoadKind::kRuntimeCall ||
-             GetLoadKind() == LoadKind::kBssEntry) &&
-            !IsInBootImage());
+           ((GetLoadKind() == LoadKind::kRuntimeCall || NeedsBss()) && !IsInBootImage());
   }
 
   ReferenceTypeInfo GetLoadedClassRTI() {
