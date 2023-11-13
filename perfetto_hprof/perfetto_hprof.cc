@@ -1167,6 +1167,9 @@ extern "C" bool ArtPlugin_Initialize() {
     return false;
   }
   art::Thread* self = art::Thread::Current();
+  if (self == nullptr) {
+    return false;
+  }
   {
     art::MutexLock lk(self, GetStateMutex());
     if (g_state != State::kUninitialized) {
