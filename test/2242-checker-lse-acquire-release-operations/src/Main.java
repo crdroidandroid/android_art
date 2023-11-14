@@ -24,63 +24,126 @@ class TestClass {
 public class Main {
   public static void main(String[] args) {
     // Volatile accesses.
-    assertEquals($noinline$testVolatileAccessesMustBeKept(new TestClass()), 3);
+    assertEquals(3, $noinline$testVolatileAccessesMustBeKept(new TestClass()));
+    assertEquals(3, $noinline$testSingletonVolatileAccessesCanBeRemoved());
 
     // Volatile loads - Different fields shouldn't alias.
-    assertEquals($noinline$testVolatileLoadDifferentFields(new TestClass(), new TestClass()), 3);
+    assertEquals(3, $noinline$testVolatileLoadDifferentFields(new TestClass(), new TestClass()));
     assertEquals(
-            $noinline$testVolatileLoadDifferentFieldsBlocking(new TestClass(), new TestClass()),
-            3);
+            3, $noinline$testVolatileLoadDifferentFieldsBlocking(new TestClass(), new TestClass()));
 
     // Volatile loads - Redundant store.
-    assertEquals($noinline$testVolatileLoadRedundantStore(new TestClass()), 2);
-    assertEquals($noinline$testVolatileLoadRedundantStoreBlocking(new TestClass()), 2);
-    assertEquals($noinline$testVolatileLoadRedundantStoreBlockingOnlyLoad(new TestClass()), 2);
+    assertEquals(2, $noinline$testVolatileLoadRedundantStore(new TestClass()));
+    assertEquals(2, $noinline$testVolatileLoadRedundantStoreBlocking(new TestClass()));
+    assertEquals(2, $noinline$testVolatileLoadRedundantStoreBlockingOnlyLoad(new TestClass()));
 
     // Volatile loads - Set and merge values.
-    assertEquals($noinline$testVolatileLoadSetAndMergeValues(new TestClass(), true), 1);
-    assertEquals($noinline$testVolatileLoadSetAndMergeValues(new TestClass(), false), 2);
-    assertEquals($noinline$testVolatileLoadSetAndMergeValuesBlocking(new TestClass(), true), 1);
-    assertEquals($noinline$testVolatileLoadSetAndMergeValuesBlocking(new TestClass(), false), 2);
+    assertEquals(1, $noinline$testVolatileLoadSetAndMergeValues(new TestClass(), true));
+    assertEquals(2, $noinline$testVolatileLoadSetAndMergeValues(new TestClass(), false));
+    assertEquals(1, $noinline$testVolatileLoadSetAndMergeValuesBlocking(new TestClass(), true));
+    assertEquals(2, $noinline$testVolatileLoadSetAndMergeValuesBlocking(new TestClass(), false));
+
+    // Volatile loads - Removal - Different fields shouldn't alias.
+    assertEquals(3,
+            $noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(
+                    new TestClass(), new TestClass()));
+
+    // Volatile loads - Removal - Redundant store.
+    assertEquals(
+            2, $noinline$testVolatileLoadRedundantStoreRemovedSynchronization(new TestClass()));
+
+    // Volatile loads - Removal - Set and merge values.
+    assertEquals(1,
+            $noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), true));
+    assertEquals(2,
+            $noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), false));
+
+    // Volatile loads - Removal - with inlining
+    assertEquals(2, $noinline$testVolatileLoadInlineMethodWithSynchronizedScope(new TestClass()));
 
     // Volatile stores - Different fields shouldn't alias.
-    assertEquals($noinline$testVolatileStoreDifferentFields(new TestClass(), new TestClass()), 3);
-    assertEquals(
-            $noinline$testVolatileStoreDifferentFieldsBlocking(new TestClass(), new TestClass()),
-            3);
+    assertEquals(3, $noinline$testVolatileStoreDifferentFields(new TestClass(), new TestClass()));
+    assertEquals(3,
+            $noinline$testVolatileStoreDifferentFieldsBlocking(new TestClass(), new TestClass()));
 
     // Volatile stores - Redundant store.
-    assertEquals($noinline$testVolatileStoreRedundantStore(new TestClass()), 2);
-    assertEquals($noinline$testVolatileStoreRedundantStoreBlocking(new TestClass()), 2);
-    assertEquals($noinline$testVolatileStoreRedundantStoreBlockingOnlyLoad(new TestClass()), 2);
+    assertEquals(2, $noinline$testVolatileStoreRedundantStore(new TestClass()));
+    assertEquals(2, $noinline$testVolatileStoreRedundantStoreBlocking(new TestClass()));
+    assertEquals(2, $noinline$testVolatileStoreRedundantStoreBlockingOnlyLoad(new TestClass()));
 
     // Volatile stores - Set and merge values.
-    assertEquals($noinline$testVolatileStoreSetAndMergeValues(new TestClass(), true), 1);
-    assertEquals($noinline$testVolatileStoreSetAndMergeValues(new TestClass(), false), 2);
-    assertEquals($noinline$testVolatileStoreSetAndMergeValuesNotBlocking(new TestClass(), true), 1);
-    assertEquals($noinline$testVolatileStoreSetAndMergeValuesNotBlocking(new TestClass(), false), 2);
+    assertEquals(1, $noinline$testVolatileStoreSetAndMergeValues(new TestClass(), true));
+    assertEquals(2, $noinline$testVolatileStoreSetAndMergeValues(new TestClass(), false));
+    assertEquals(1, $noinline$testVolatileStoreSetAndMergeValuesNotBlocking(new TestClass(), true));
+    assertEquals(
+            2, $noinline$testVolatileStoreSetAndMergeValuesNotBlocking(new TestClass(), false));
+
+    // Volatile stores - Removal - Different fields shouldn't alias.
+    assertEquals(3,
+            $noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(
+                    new TestClass(), new TestClass()));
+
+    // Volatile stores - Removal - Redundant store.
+    assertEquals(
+            2, $noinline$testVolatileStoreRedundantStoreRemovedSynchronization(new TestClass()));
+
+    // Volatile stores - Removal - Set and merge values.
+    assertEquals(1,
+            $noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), true));
+    assertEquals(2,
+            $noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), false));
+
+    // Volatile stores - Removal - with inlining
+    assertEquals(2, $noinline$testVolatileStoreInlineMethodWithSynchronizedScope(new TestClass()));
 
     // Monitor Operations - Different fields shouldn't alias.
+    // Make sure the static variable used for synchronization is non-null.
+    classForSync = new TestClass();
+
     assertEquals(
-            $noinline$testMonitorOperationDifferentFields(new TestClass(), new TestClass()), 3);
-    assertEquals($noinline$testMonitorOperationDifferentFieldsBlocking(
-                          new TestClass(), new TestClass()),
-            3);
+            3, $noinline$testMonitorOperationDifferentFields(new TestClass(), new TestClass()));
+    assertEquals(3,
+            $noinline$testMonitorOperationDifferentFieldsBlocking(
+                    new TestClass(), new TestClass()));
 
     // Monitor Operations - Redundant store.
-    assertEquals($noinline$testMonitorOperationRedundantStore(new TestClass()), 2);
-    assertEquals($noinline$testMonitorOperationRedundantStoreBlocking(new TestClass()), 2);
-    assertEquals(
-            $noinline$testMonitorOperationRedundantStoreBlockingOnlyLoad(new TestClass()), 2);
-    assertEquals($noinline$testMonitorOperationRedundantStoreBlockingExit(new TestClass()), 2);
+    assertEquals(2, $noinline$testMonitorOperationRedundantStore(new TestClass()));
+    assertEquals(2, $noinline$testMonitorOperationRedundantStoreBlocking(new TestClass()));
+    assertEquals(2, $noinline$testMonitorOperationRedundantStoreBlockingOnlyLoad(new TestClass()));
+    assertEquals(2, $noinline$testMonitorOperationRedundantStoreBlockingExit(new TestClass()));
 
     // Monitor Operations - Set and merge values.
-    assertEquals($noinline$testMonitorOperationSetAndMergeValues(new TestClass(), true), 1);
-    assertEquals($noinline$testMonitorOperationSetAndMergeValues(new TestClass(), false), 2);
+    assertEquals(1, $noinline$testMonitorOperationSetAndMergeValues(new TestClass(), true));
+    assertEquals(2, $noinline$testMonitorOperationSetAndMergeValues(new TestClass(), false));
+    assertEquals(1, $noinline$testMonitorOperationSetAndMergeValuesBlocking(new TestClass(), true));
     assertEquals(
-            $noinline$testMonitorOperationSetAndMergeValuesBlocking(new TestClass(), true), 1);
+            2, $noinline$testMonitorOperationSetAndMergeValuesBlocking(new TestClass(), false));
+
+    // Monitor Operations - Removal - Different fields shouldn't alias.
+    assertEquals(3,
+            $noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(
+                    new TestClass(), new TestClass()));
+
+    // Monitor Operations - Removal - Redundant store.
     assertEquals(
-            $noinline$testMonitorOperationSetAndMergeValuesBlocking(new TestClass(), false), 2);
+            2, $noinline$testMonitorOperationRedundantStoreRemovedSynchronization(new TestClass()));
+
+    // Monitor Operations - Removal - Set and merge values.
+    assertEquals(1,
+            $noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), true));
+    assertEquals(2,
+            $noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(
+                    new TestClass(), false));
+
+    // Monitor Operations - Removal - with inlining
+    assertEquals(2, $noinline$testMonitorOperationInlineSynchronizedMethod(new TestClass()));
+    assertEquals(
+            2, $noinline$testMonitorOperationInlineMethodWithSynchronizedScope(new TestClass()));
   }
 
   public static void assertEquals(int expected, int result) {
@@ -111,6 +174,31 @@ public class Main {
     // Redundant store that has to be kept.
     obj1.vi = 3;
     result = obj1.vi;
+    return result;
+  }
+
+  /// CHECK-START: int Main.$noinline$testSingletonVolatileAccessesCanBeRemoved() load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testSingletonVolatileAccessesCanBeRemoved() load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testSingletonVolatileAccessesCanBeRemoved() load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+  static int $noinline$testSingletonVolatileAccessesCanBeRemoved() {
+    Main m = new Main();
+    int result;
+    m.vi = 3;
+    // Redundant load can be removed.
+    result = m.vi;
+    result = m.vi;
+    // Redundant store can be removed.
+    m.vi = 3;
+    result = m.vi;
     return result;
   }
 
@@ -288,6 +376,136 @@ public class Main {
     return obj.i;
   }
 
+  /// CHECK-START: int Main.$noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet field_name:Main.vi
+  /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileLoadDifferentFieldsRemovedSynchronization(
+          TestClass obj1, TestClass obj2) {
+    Main m = new Main();
+
+    obj1.i = 1;
+    obj2.j = 2;
+    int unused = m.vi;
+
+    return obj1.i + obj2.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet field_name:Main.vi
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet field_name:Main.vi
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileLoadRedundantStoreRemovedSynchronization(TestClass obj) {
+    Main m = new Main();
+
+    obj.j = 1;
+    int unused = m.vi;
+    obj.j = 2;
+    unused = m.vi;
+
+    return obj.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (before)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldGet field_name:Main.vi
+  /// CHECK-DAG: InstanceFieldGet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK: Phi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileLoadSetAndMergeValuesRemovedSynchronization(
+          TestClass obj, boolean b) {
+    Main m = new Main();
+
+    if (b) {
+      obj.i = 1;
+    } else {
+      obj.i = 2;
+    }
+    int unused = m.vi;
+    return obj.i;
+  }
+
+  // Can't eliminate the setters, or volatile getters in this method.
+
+  /// CHECK-START: int Main.$inline$SetterWithVolatileLoads(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$inline$SetterWithVolatileLoads(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+  int $inline$SetterWithVolatileLoads(TestClass obj) {
+    obj.j = 1;
+    int unused = this.vi;
+    obj.j = 2;
+    unused = this.vi;
+    return obj.j;
+  }
+
+  // But we can eliminate once inlined.
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileLoadInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK-NOT: InstanceFieldSet field_name:TestClass.j
+  static int $noinline$testVolatileLoadInlineMethodWithSynchronizedScope(TestClass obj) {
+    Main m = new Main();
+    return m.$inline$SetterWithVolatileLoads(obj);
+  }
+
   /// CHECK-START: int Main.$noinline$testVolatileStoreDifferentFields(TestClass, TestClass) load_store_elimination (before)
   /// CHECK: InstanceFieldSet field_name:TestClass.vi
   /// CHECK: InstanceFieldSet
@@ -462,6 +680,136 @@ public class Main {
     return obj.i;
   }
 
+  /// CHECK-START: int Main.$noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet field_name:Main.vi
+  /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileStoreDifferentFieldsRemovedSynchronization(
+          TestClass obj1, TestClass obj2) {
+    Main m = new Main();
+
+    obj1.i = 1;
+    obj2.j = 2;
+    m.vi = 123;
+
+    return obj1.i + obj2.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileStoreRedundantStoreRemovedSynchronization(TestClass obj) {
+    Main m = new Main();
+
+    obj.j = 1;
+    m.vi = 123;
+    obj.j = 2;
+    m.vi = 123;
+
+    return obj.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (before)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldGet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK: Phi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testVolatileStoreSetAndMergeValuesRemovedSynchronization(
+          TestClass obj, boolean b) {
+    Main m = new Main();
+
+    if (b) {
+      obj.i = 1;
+    } else {
+      obj.i = 2;
+    }
+    m.vi = 123;
+    return obj.i;
+  }
+
+  // Can't eliminate the setters in this method.
+
+  /// CHECK-START: int Main.$inline$SetterWithVolatileStores(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$inline$SetterWithVolatileStores(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+  int $inline$SetterWithVolatileStores(TestClass obj) {
+    obj.j = 1;
+    this.vi = 123;
+    obj.j = 2;
+    this.vi = 123;
+    return obj.j;
+  }
+
+  // But we can eliminate once inlined.
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK:     InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldSet field_name:Main.vi
+
+  /// CHECK-START: int Main.$noinline$testVolatileStoreInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet field_name:TestClass.j
+  /// CHECK-NOT: InstanceFieldSet field_name:TestClass.j
+  static int $noinline$testVolatileStoreInlineMethodWithSynchronizedScope(TestClass obj) {
+    Main m = new Main();
+    return m.$inline$SetterWithVolatileStores(obj);
+  }
+
   /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFields(TestClass, TestClass) load_store_elimination (before)
   /// CHECK: InstanceFieldSet
   /// CHECK: InstanceFieldSet
@@ -483,15 +831,11 @@ public class Main {
 
   // Unrelated monitor operations shouldn't block LSE.
   static int $noinline$testMonitorOperationDifferentFields(TestClass obj1, TestClass obj2) {
-    Main m = new Main();
-    synchronized (m) {}
-
+    synchronized (classForSync) {}
     obj1.i = 1;
     obj2.j = 2;
     int result = obj1.i + obj2.j;
-
-    synchronized (m) {}
-
+    synchronized (classForSync) {}
     return result;
   }
 
@@ -513,11 +857,9 @@ public class Main {
 
   // A synchronized operation blocks loads.
   static int $noinline$testMonitorOperationDifferentFieldsBlocking(TestClass obj1, TestClass obj2) {
-    Main m = new Main();
-
     obj1.i = 1;
     obj2.j = 2;
-    synchronized (m) {
+    synchronized (classForSync) {
       return obj1.i + obj2.j;
     }
   }
@@ -539,12 +881,10 @@ public class Main {
   /// CHECK-NOT: InstanceFieldGet
 
   static int $noinline$testMonitorOperationRedundantStore(TestClass obj) {
-    Main m = new Main();
-    synchronized (m) {
+    synchronized (classForSync) {
       obj.j = 1;
       obj.j = 2;
     }
-
     return obj.j;
   }
 
@@ -565,13 +905,10 @@ public class Main {
   /// CHECK-NOT: InstanceFieldGet
 
   static int $noinline$testMonitorOperationRedundantStoreBlocking(TestClass obj) {
-    Main m = new Main();
-
     // This store must be kept due to the monitor operation.
     obj.j = 1;
-    synchronized (m) {}
+    synchronized (classForSync) {}
     obj.j = 2;
-
     return obj.j;
   }
 
@@ -592,13 +929,10 @@ public class Main {
   /// CHECK: InstanceFieldGet
 
   static int $noinline$testMonitorOperationRedundantStoreBlockingOnlyLoad(TestClass obj) {
-    Main m = new Main();
-
     // This store can be safely removed.
     obj.j = 1;
     obj.j = 2;
-    synchronized (m) {}
-
+    synchronized (classForSync) {}
     // This load remains due to the monitor operation.
     return obj.j;
   }
@@ -622,16 +956,13 @@ public class Main {
   /// CHECK-NOT: InstanceFieldGet
 
   static int $noinline$testMonitorOperationRedundantStoreBlockingExit(TestClass obj) {
-    Main m = new Main();
-
-    synchronized (m) {
+    synchronized (classForSync) {
       // This store can be removed.
       obj.j = 0;
       // This store must be kept due to the monitor exit operation.
       obj.j = 1;
     }
     obj.j = 2;
-
     return obj.j;
   }
 
@@ -658,13 +989,11 @@ public class Main {
   /// CHECK-NOT: InstanceFieldGet
 
   static int $noinline$testMonitorOperationSetAndMergeValues(TestClass obj, boolean b) {
-    Main m = new Main();
-
     if (b) {
-      synchronized (m) {}
+      synchronized (classForSync) {}
       obj.i = 1;
     } else {
-      synchronized (m) {}
+      synchronized (classForSync) {}
       obj.i = 2;
     }
     return obj.i;
@@ -690,6 +1019,102 @@ public class Main {
   /// CHECK: InstanceFieldGet
 
   static int $noinline$testMonitorOperationSetAndMergeValuesBlocking(TestClass obj, boolean b) {
+    if (b) {
+      obj.i = 1;
+    } else {
+      obj.i = 2;
+    }
+    synchronized (classForSync) {}
+    return obj.i;
+  }
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (before)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(TestClass, TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+
+  static int $noinline$testMonitorOperationDifferentFieldsRemovedSynchronization(
+          TestClass obj1, TestClass obj2) {
+    Main m = new Main();
+
+    obj1.i = 1;
+    obj2.j = 2;
+    synchronized (m) {}
+
+    return obj1.i + obj2.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (before)
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldSet
+  /// CHECK: InstanceFieldGet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (before)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK: InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+  static int $noinline$testMonitorOperationRedundantStoreRemovedSynchronization(TestClass obj) {
+    Main m = new Main();
+
+    obj.j = 1;
+    synchronized (m) {}
+    obj.j = 2;
+    synchronized (m) {}
+
+    return obj.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (before)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldGet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: InstanceFieldSet
+  /// CHECK-DAG: Return
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (before)
+  /// CHECK-DAG: MonitorOperation kind:enter
+  /// CHECK-DAG: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK: Phi
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(TestClass, boolean) load_store_elimination (after)
+  /// CHECK-NOT: InstanceFieldGet
+  static int $noinline$testMonitorOperationSetAndMergeValuesRemovedSynchronization(
+          TestClass obj, boolean b) {
     Main m = new Main();
 
     if (b) {
@@ -700,4 +1125,75 @@ public class Main {
     synchronized (m) {}
     return obj.i;
   }
+
+  synchronized int $inline$synchronizedSetter(TestClass obj) {
+    obj.j = 1;
+    obj.j = 2;
+    return obj.j;
+  }
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) inliner (before)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) inliner (after)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) load_store_elimination (before)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet
+  /// CHECK:     InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineSynchronizedMethod(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+  static int $noinline$testMonitorOperationInlineSynchronizedMethod(TestClass obj) {
+    Main m = new Main();
+    return m.$inline$synchronizedSetter(obj);
+  }
+
+  int $inline$SetterWithSynchronizedScope(TestClass obj) {
+    synchronized (this) {
+      obj.j = 1;
+      obj.j = 2;
+      return obj.j;
+    }
+  }
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) inliner (before)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) inliner (after)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (before)
+  /// CHECK: MonitorOperation kind:enter
+  /// CHECK: MonitorOperation kind:exit
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (before)
+  /// CHECK:     InstanceFieldSet
+  /// CHECK:     InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK-NOT: MonitorOperation
+
+  /// CHECK-START: int Main.$noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass) load_store_elimination (after)
+  /// CHECK:     InstanceFieldSet
+  /// CHECK-NOT: InstanceFieldSet
+  static int $noinline$testMonitorOperationInlineMethodWithSynchronizedScope(TestClass obj) {
+    Main m = new Main();
+    return m.$inline$SetterWithSynchronizedScope(obj);
+  }
+
+  static TestClass classForSync;
+  volatile int vi;
 }

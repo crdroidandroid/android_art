@@ -1015,23 +1015,33 @@ class LSEVisitor final : private HGraphDelegateVisitor {
   }
 
   void VisitInstanceFieldGet(HInstanceFieldGet* instruction) override {
+    HInstruction* object = instruction->InputAt(0);
     if (instruction->IsVolatile()) {
-      HandleAcquireLoad(instruction);
-      return;
+      ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(
+          heap_location_collector_.HuntForOriginalReference(object));
+      if (!ref_info->IsSingletonAndRemovable()) {
+        HandleAcquireLoad(instruction);
+        return;
+      }
+      // Treat it as a normal load if it is a removable singleton.
     }
 
-    HInstruction* object = instruction->InputAt(0);
     const FieldInfo& field = instruction->GetFieldInfo();
     VisitGetLocation(instruction, heap_location_collector_.GetFieldHeapLocation(object, &field));
   }
 
   void VisitInstanceFieldSet(HInstanceFieldSet* instruction) override {
+    HInstruction* object = instruction->InputAt(0);
     if (instruction->IsVolatile()) {
-      HandleReleaseStore(instruction);
-      return;
+      ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(
+          heap_location_collector_.HuntForOriginalReference(object));
+      if (!ref_info->IsSingletonAndRemovable()) {
+        HandleReleaseStore(instruction);
+        return;
+      }
+      // Treat it as a normal store if it is a removable singleton.
     }
 
-    HInstruction* object = instruction->InputAt(0);
     const FieldInfo& field = instruction->GetFieldInfo();
     HInstruction* value = instruction->InputAt(1);
     size_t idx = heap_location_collector_.GetFieldHeapLocation(object, &field);
@@ -1044,8 +1054,8 @@ class LSEVisitor final : private HGraphDelegateVisitor {
       return;
     }
 
-    HInstruction* cls = instruction->InputAt(0);
     const FieldInfo& field = instruction->GetFieldInfo();
+    HInstruction* cls = instruction->InputAt(0);
     VisitGetLocation(instruction, heap_location_collector_.GetFieldHeapLocation(cls, &field));
   }
 
@@ -1055,14 +1065,30 @@ class LSEVisitor final : private HGraphDelegateVisitor {
       return;
     }
 
-    HInstruction* cls = instruction->InputAt(0);
     const FieldInfo& field = instruction->GetFieldInfo();
+    HInstruction* cls = instruction->InputAt(0);
     HInstruction* value = instruction->InputAt(1);
     size_t idx = heap_location_collector_.GetFieldHeapLocation(cls, &field);
     VisitSetLocation(instruction, idx, value);
   }
 
   void VisitMonitorOperation(HMonitorOperation* monitor_op) override {
+    HInstruction* object = monitor_op->InputAt(0);
+    ReferenceInfo* ref_info = heap_location_collector_.FindReferenceInfoOf(
+        heap_location_collector_.HuntForOriginalReference(object));
+    if (ref_info->IsSingletonAndRemovable()) {
+      // If the object is a removable singleton, we know that no other threads will have
+      // access to it, and we can remove the MonitorOperation instruction.
+      // MONITOR_ENTER throws when encountering a null object. If `object` is a removable
+      // singleton, it is guaranteed to be non-null so we don't have to worry about the NullCheck.
+      DCHECK(!object->CanBeNull());
+      monitor_op->GetBlock()->RemoveInstruction(monitor_op);
+      MaybeRecordStat(stats_, MethodCompilationStat::kRemovedMonitorOp);
+      return;
+    }
+
+    // We detected a monitor operation that we couldn't remove. See also LSEVisitor::Run().
+    monitor_op->GetBlock()->GetGraph()->SetHasMonitorOperations(true);
     if (monitor_op->IsEnter()) {
       HandleAcquireLoad(monitor_op);
     } else {
@@ -2642,8 +2668,7 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
       if (load_or_store->GetBlock() != block) {
         break;  // End of instructions from the current block.
       }
-      bool is_store = load_or_store->GetSideEffects().DoesAnyWrite();
-      DCHECK_EQ(is_store, IsStore(load_or_store));
+      const bool is_store = IsStore(load_or_store);
       HInstruction* stored_value = nullptr;
       if (is_store) {
         auto it = store_records_.find(load_or_store);
@@ -3005,6 +3030,10 @@ void LSEVisitor::FindStoresWritingOldValues() {
 }
 
 void LSEVisitor::Run() {
+  // 0. Set HasMonitorOperations to false. If we encounter some MonitorOperations that we can't
+  // remove, we will set it to true in VisitMonitorOperation.
+  GetGraph()->SetHasMonitorOperations(false);
+
   // 1. Process blocks and instructions in reverse post order.
   for (HBasicBlock* block : GetGraph()->GetReversePostOrder()) {
     VisitBasicBlock(block);
@@ -3970,14 +3999,22 @@ void LSEVisitor::FinishFullLSE() {
 
     load->ReplaceWith(substitute);
     load->GetBlock()->RemoveInstruction(load);
+    if ((load->IsInstanceFieldGet() && load->AsInstanceFieldGet()->IsVolatile()) ||
+        (load->IsStaticFieldGet() && load->AsStaticFieldGet()->IsVolatile())) {
+      MaybeRecordStat(stats_, MethodCompilationStat::kRemovedVolatileLoad);
+    }
   }
 
   // Remove all the stores we can.
   for (const LoadStoreRecord& record : loads_and_stores_) {
-    bool is_store = record.load_or_store->GetSideEffects().DoesAnyWrite();
-    DCHECK_EQ(is_store, IsStore(record.load_or_store));
-    if (is_store && !kept_stores_.IsBitSet(record.load_or_store->GetId())) {
+    if (IsStore(record.load_or_store) && !kept_stores_.IsBitSet(record.load_or_store->GetId())) {
       record.load_or_store->GetBlock()->RemoveInstruction(record.load_or_store);
+      if ((record.load_or_store->IsInstanceFieldSet() &&
+           record.load_or_store->AsInstanceFieldSet()->IsVolatile()) ||
+          (record.load_or_store->IsStaticFieldSet() &&
+           record.load_or_store->AsStaticFieldSet()->IsVolatile())) {
+        MaybeRecordStat(stats_, MethodCompilationStat::kRemovedVolatileStore);
+      }
     }
   }
 

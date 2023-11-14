@@ -50,8 +50,8 @@ public class Main {
         // instructions that can throw.
         $noinline$testInstanceFieldSetsBlocked(
                 new Main(), new Object(), new Object(), new Object());
-        $noinline$testStaticFieldSetsBlocked(new Object(), new Object(), new Object());
-        $noinline$testArraySetsSameRTIBlocked();
+        $noinline$testStaticFieldSetsBlocked(new Main(), new Object(), new Object(), new Object());
+        $noinline$testArraySetsSameRTIBlocked(new Main());
     }
 
     /// CHECK-START: Main Main.$noinline$testInstanceFieldSets(Main, java.lang.Object, java.lang.Object, java.lang.Object) disassembly (after)
@@ -273,46 +273,45 @@ public class Main {
         return m;
     }
 
-    /// CHECK-START: void Main.$noinline$testStaticFieldSetsBlocked(java.lang.Object, java.lang.Object, java.lang.Object) disassembly (after)
+    /// CHECK-START: void Main.$noinline$testStaticFieldSetsBlocked(Main, java.lang.Object, java.lang.Object, java.lang.Object) disassembly (after)
     /// CHECK: StaticFieldSet field_name:Main.inner_static field_type:Reference write_barrier_kind:EmitWithNullCheck
     /// CHECK: InvokeStaticOrDirect method_name:Main.$noinline$emptyMethod
     /// CHECK: StaticFieldSet field_name:Main.inner_static2 field_type:Reference write_barrier_kind:EmitWithNullCheck
     /// CHECK: MonitorOperation kind:enter
     /// CHECK: StaticFieldSet field_name:Main.inner_static3 field_type:Reference write_barrier_kind:EmitWithNullCheck
 
-    /// CHECK-START: void Main.$noinline$testStaticFieldSetsBlocked(java.lang.Object, java.lang.Object, java.lang.Object) disassembly (after)
+    /// CHECK-START: void Main.$noinline$testStaticFieldSetsBlocked(Main, java.lang.Object, java.lang.Object, java.lang.Object) disassembly (after)
     /// CHECK: ; card_table
     /// CHECK: ; card_table
     /// CHECK: ; card_table
     /// CHECK-NOT: ; card_table
-    private static void $noinline$testStaticFieldSetsBlocked(Object o, Object o2, Object o3) {
+    private static void $noinline$testStaticFieldSetsBlocked(
+            Main m, Object o, Object o2, Object o3) {
         inner_static = o;
         $noinline$emptyMethod();
         inner_static2 = o2;
-        Main m = new Main();
         synchronized (m) {
             inner_static3 = o3;
         }
     }
 
-    /// CHECK-START: java.lang.Object[] Main.$noinline$testArraySetsSameRTIBlocked() disassembly (after)
+    /// CHECK-START: java.lang.Object[] Main.$noinline$testArraySetsSameRTIBlocked(Main) disassembly (after)
     /// CHECK: ArraySet needs_type_check:false can_trigger_gc:false write_barrier_kind:EmitNoNullCheck
     /// CHECK: InvokeStaticOrDirect method_name:Main.$noinline$emptyMethod
     /// CHECK: ArraySet needs_type_check:false can_trigger_gc:false write_barrier_kind:EmitNoNullCheck
     /// CHECK: MonitorOperation kind:enter
     /// CHECK: ArraySet needs_type_check:false can_trigger_gc:false write_barrier_kind:EmitNoNullCheck
 
-    /// CHECK-START: java.lang.Object[] Main.$noinline$testArraySetsSameRTIBlocked() disassembly (after)
+    /// CHECK-START: java.lang.Object[] Main.$noinline$testArraySetsSameRTIBlocked(Main) disassembly (after)
     /// CHECK: ; card_table
     /// CHECK: ; card_table
     /// CHECK: ; card_table
     /// CHECK-NOT: ; card_table
-    private static java.lang.Object[] $noinline$testArraySetsSameRTIBlocked() {
+    private static java.lang.Object[] $noinline$testArraySetsSameRTIBlocked(Main m) {
         Object[] arr = new Object[3];
         arr[0] = inner_static;
         $noinline$emptyMethod();
         arr[1] = inner_static2;
-        Main m = new Main();
         synchronized (m) {
             arr[2] = inner_static3;
         }
