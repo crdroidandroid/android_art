@@ -533,6 +533,10 @@ libart_cc_defaults {
         //   manifest-art.json.
         "libjavacore",
     ],
+    // Don't export symbols from static libs used by libart-compiler.
+    ldflags: [
+        "-Wl,--exclude-libs=libartd-compiler.a",
+    ],
 }
 
 libart_static_cc_defaults {
