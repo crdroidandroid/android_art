@@ -1461,7 +1461,8 @@ void* JitCodeCache::MoreCore(const void* mspace, intptr_t increment) {
 }
 
 void JitCodeCache::GetProfiledMethods(const std::set<std::string>& dex_base_locations,
-                                      std::vector<ProfileMethodInfo>& methods) {
+                                      std::vector<ProfileMethodInfo>& methods,
+                                      uint16_t inline_cache_threshold) {
   Thread* self = Thread::Current();
   WaitUntilInlineCacheAccessible(self);
   // TODO: Avoid read barriers for potentially dead methods.
@@ -1480,13 +1481,17 @@ void JitCodeCache::GetProfiledMethods(const std::set<std::string>& dex_base_loca
     }
     std::vector<ProfileMethodInfo::ProfileInlineCache> inline_caches;
 
-    // If the method is still baseline compiled, don't save the inline caches.
-    // They might be incomplete and cause unnecessary deoptimizations.
+    // If the method is still baseline compiled and doesn't meet the inline cache threshold, don't
+    // save the inline caches because they might be incomplete.
+    // Although we don't deoptimize for incomplete inline caches in AOT-compiled code, inlining
+    // leads to larger generated code.
     // If the inline cache is empty the compiler will generate a regular invoke virtual/interface.
     const void* entry_point = method->GetEntryPointFromQuickCompiledCode();
     if (ContainsPc(entry_point) &&
         CodeInfo::IsBaseline(
-            OatQuickMethodHeader::FromEntryPoint(entry_point)->GetOptimizedCodeInfoPtr())) {
+            OatQuickMethodHeader::FromEntryPoint(entry_point)->GetOptimizedCodeInfoPtr()) &&
+        (ProfilingInfo::GetOptimizeThreshold() - info->GetBaselineHotnessCount()) <
+            inline_cache_threshold) {
       methods.emplace_back(/*ProfileMethodInfo*/
           MethodReference(dex_file, method->GetDexMethodIndex()), inline_caches);
       continue;

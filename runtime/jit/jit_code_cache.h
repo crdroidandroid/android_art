@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_JIT_JIT_CODE_CACHE_H_
 #define ART_RUNTIME_JIT_JIT_CODE_CACHE_H_
 
+#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <set>
@@ -328,9 +329,11 @@ class JitCodeCache {
   void* MoreCore(const void* mspace, intptr_t increment);
 
   // Adds to `methods` all profiled methods which are part of any of the given dex locations.
+  // Saves inline caches for a method if its hotness meets `inline_cache_threshold` after being
+  // baseline compiled.
   void GetProfiledMethods(const std::set<std::string>& dex_base_locations,
-                          std::vector<ProfileMethodInfo>& methods)
-      REQUIRES(!Locks::jit_lock_)
+                          std::vector<ProfileMethodInfo>& methods,
+                          uint16_t inline_cache_threshold) REQUIRES(!Locks::jit_lock_)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
   void InvalidateAllCompiledCode()
