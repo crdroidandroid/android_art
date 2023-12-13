@@ -339,8 +339,9 @@
     },
     {
         "tests": ["000-nop",
-                  "595-profile-saving"],
-        "description": "The doesn't compile anything",
+                  "595-profile-saving",
+                  "2271-profile-inline-cache"],
+        "description": "The test doesn't compile anything",
         "env_vars": {"ART_TEST_BISECTION": "true"},
         "variant": "optimizing | regalloc_gc"
     },
@@ -509,7 +510,8 @@
             "924-threads",
             "981-dedup-original-dex",
             "1900-track-alloc",
-            "2230-profile-save-hotness"
+            "2230-profile-save-hotness",
+            "2271-profile-inline-cache"
         ],
         "description": ["Tests that require exact knowledge of the deoptimization state, the ",
                         "number of plugins and agents, or breaks other openjdkjvmti assumptions."],
@@ -941,7 +943,6 @@
           "593-checker-shift-and-simplifier",
           "594-invoke-super",
           "595-error-class",
-          "595-profile-saving",
           "596-app-images",
           "596-checker-dead-phi",
           "596-monitor-inflation",
@@ -1138,6 +1139,7 @@
     {
         "tests": ["178-app-image-native-method",
                   "530-checker-peel-unroll",
+                  "595-profile-saving",
                   "616-cha-unloading",
                   "674-hiddenapi",
                   "677-fsi2",
@@ -1227,6 +1229,7 @@
                   "2246-trace-stream",
                   "2254-class-value-before-and-after-u",
                   "2261-badcleaner-in-systemcleaner"],
+                  "2271-profile-inline-cache"],
         "variant": "jvm",
         "description": ["Doesn't run on RI."]
     },
