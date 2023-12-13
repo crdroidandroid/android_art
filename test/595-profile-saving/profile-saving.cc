@@ -14,18 +14,11 @@
  * limitations under the License.
  */
 
-#include "dex/dex_file.h"
-
 #include "art_method-inl.h"
-#include "dex/method_reference.h"
-#include "jit/profile_saver.h"
+#include "art_method.h"
+#include "jit/profiling_info.h"
 #include "jni.h"
-#include "mirror/class-inl.h"
 #include "mirror/executable.h"
-#include "nativehelper/ScopedUtfChars.h"
-#include "oat_file_assistant.h"
-#include "oat_file_manager.h"
-#include "profile/profile_compilation_info.h"
 #include "scoped_thread_state_change-inl.h"
 #include "thread.h"
 
@@ -42,44 +35,6 @@ extern "C" JNIEXPORT void JNICALL Java_Main_ensureProfilingInfo(JNIEnv* env,
   if (ProfilingInfo::Create(soa.Self(), art_method) == nullptr) {
     LOG(ERROR) << "Failed to create profiling info for method " << art_method->PrettyMethod();
   }
-}
-
-extern "C" JNIEXPORT void JNICALL Java_Main_ensureProfileProcessing(JNIEnv*, jclass) {
-  ProfileSaver::ForceProcessProfiles();
-}
-
-extern "C" JNIEXPORT jboolean JNICALL Java_Main_isForBootImage(JNIEnv* env,
-                                                               jclass,
-                                                               jstring filename) {
-  ScopedUtfChars filename_chars(env, filename);
-  CHECK(filename_chars.c_str() != nullptr);
-
-  ProfileCompilationInfo info(/*for_boot_image=*/ true);
-  bool result = info.Load(std::string(filename_chars.c_str()), /*clear_if_invalid=*/ false);
-  return result ? JNI_TRUE : JNI_FALSE;
-}
-
-extern "C" JNIEXPORT jboolean JNICALL Java_Main_presentInProfile(JNIEnv* env,
-                                                                 jclass c,
-                                                                 jstring filename,
-                                                                 jobject method) {
-  bool for_boot_image = Java_Main_isForBootImage(env, c, filename) == JNI_TRUE;
-  ScopedUtfChars filename_chars(env, filename);
-  CHECK(filename_chars.c_str() != nullptr);
-  ScopedObjectAccess soa(env);
-  ObjPtr<mirror::Executable> exec = soa.Decode<mirror::Executable>(method);
-  ArtMethod* art_method = exec->GetArtMethod();
-  MethodReference ref(art_method->GetDexFile(), art_method->GetDexMethodIndex());
-
-  ProfileCompilationInfo info(Runtime::Current()->GetArenaPool(), for_boot_image);
-  if (!info.Load(filename_chars.c_str(), /*clear_if_invalid=*/false)) {
-    LOG(ERROR) << "Failed to load profile from " << filename;
-    return JNI_FALSE;
-  }
-  const ProfileCompilationInfo::MethodHotness hotness = info.GetMethodHotness(ref);
-  // TODO: Why do we check `hotness.IsHot()` instead of `hotness.IsInProfile()`
-  // in a method named `presentInProfile()`?
-  return hotness.IsHot() ? JNI_TRUE : JNI_FALSE;
 }
 
 }  // namespace

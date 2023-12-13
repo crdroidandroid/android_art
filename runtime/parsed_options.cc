@@ -313,6 +313,7 @@ std::unique_ptr<RuntimeParser> ParsedOptions::MakeParser(bool ignore_unrecognize
                "-Xps-min-classes-to-save:_",
                "-Xps-min-notification-before-wake:_",
                "-Xps-max-notification-before-wake:_",
+               "-Xps-inline-cache-threshold:_",
                "-Xps-profile-path:_"})
           .WithHelp("profile-saver options -Xps-<key>:<value>")
           .WithType<ProfileSaverOptions>()

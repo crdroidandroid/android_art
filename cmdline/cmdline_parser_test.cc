@@ -487,7 +487,7 @@ TEST_F(CmdlineParserTest, TestJitOptions) {
 * -Xps-*
 */
 TEST_F(CmdlineParserTest, ProfileSaverOptions) {
-  ProfileSaverOptions opt = ProfileSaverOptions(true, 1, 2, 3, 4, 5, 6, 7, 8, "abc", true);
+  ProfileSaverOptions opt = ProfileSaverOptions(true, 1, 2, 3, 4, 5, 6, 7, 8, 9, "abc", true);
 
   EXPECT_SINGLE_PARSE_VALUE(opt,
                             "-Xjitsaveprofilinginfo "
@@ -499,6 +499,7 @@ TEST_F(CmdlineParserTest, ProfileSaverOptions) {
                             "-Xps-min-classes-to-save:6 "
                             "-Xps-min-notification-before-wake:7 "
                             "-Xps-max-notification-before-wake:8 "
+                            "-Xps-inline-cache-threshold:9 "
                             "-Xps-profile-path:abc "
                             "-Xps-profile-boot-class-path",
                             M::ProfileSaverOpts);
