@@ -34,7 +34,7 @@ struct ProfileSaverOptions {
   static constexpr uint32_t kMinNotificationBeforeWake = 10;
   static constexpr uint32_t kMaxNotificationBeforeWake = 50;
   static constexpr uint32_t kHotStartupMethodSamplesNotSet = std::numeric_limits<uint32_t>::max();
-  static constexpr uint16_t kInlineCacheThreshold = std::numeric_limits<uint16_t>::max();
+  static constexpr uint16_t kInlineCacheThreshold = 4000;
 
   ProfileSaverOptions() :
     enabled_(false),
