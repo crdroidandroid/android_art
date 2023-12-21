@@ -2055,7 +2055,7 @@ bool ClassLinker::AddImageSpace(gc::space::ImageSpace* space,
   if (image_pointer_size_ != space->GetImageHeader().GetPointerSize()) {
     *error_msg = StringPrintf("Application image pointer size does not match runtime: %zu vs %zu",
                               static_cast<size_t>(space->GetImageHeader().GetPointerSize()),
-                              image_pointer_size_);
+                              static_cast<size_t>(image_pointer_size_));
     return false;
   }
   size_t expected_image_roots = ImageHeader::NumberOfImageRoots(app_image);
