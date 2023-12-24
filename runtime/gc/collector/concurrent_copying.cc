@@ -2686,8 +2686,7 @@ void ConcurrentCopying::CaptureRssAtPeak() {
       // live bitmap. Deal with bound bitmaps.
       ReaderMutexLock mu(Thread::Current(), *Locks::heap_bitmap_lock_);
       if (heap_->non_moving_space_->HasBoundBitmaps()) {
-        DCHECK_EQ(bitmap->Begin(),
-                  heap_->non_moving_space_->GetLiveBitmap()->Begin());
+        DCHECK_EQ(bitmap, heap_->non_moving_space_->GetLiveBitmap());
         bitmap = heap_->non_moving_space_->GetTempBitmap();
       } else {
         bitmap = heap_->non_moving_space_->GetLiveBitmap();
