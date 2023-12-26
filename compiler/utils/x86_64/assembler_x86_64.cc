@@ -857,12 +857,14 @@ void X86_64Assembler::subps(XmmRegister dst, XmmRegister src) {
 
 void X86_64Assembler::vaddps(XmmRegister dst, XmmRegister add_left, XmmRegister add_right) {
   DCHECK(CpuHasAVXorAVX2FeatureFlag());
-  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   bool is_twobyte_form = false;
   uint8_t ByteZero = 0x00, ByteOne = 0x00, ByteTwo = 0x00;
   if (!add_right.NeedsRex()) {
     is_twobyte_form = true;
+  } else if (!add_left.NeedsRex()) {
+    return vaddps(dst, add_right, add_left);
   }
+  AssemblerBuffer::EnsureCapacity ensured(&buffer_);
   X86_64ManagedRegister vvvv_reg =
       X86_64ManagedRegister::FromXmmRegister(add_left.AsFloatRegister());
   ByteZero = EmitVexPrefixByteZero(is_twobyte_form);
