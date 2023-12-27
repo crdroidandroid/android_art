@@ -466,6 +466,7 @@ class HGraph : public ArenaObject<kArenaAllocGraph> {
   void ClearLoopInformation();
   void FindBackEdges(ArenaBitVector* visited);
   GraphAnalysisResult BuildDominatorTree();
+  GraphAnalysisResult RecomputeDominatorTree();
   void SimplifyCFG();
   void SimplifyCatchBlocks();
 
@@ -3836,6 +3837,9 @@ class HUnaryOperation : public HExpression<1> {
   // be evaluated as a constant, return null.
   HConstant* TryStaticEvaluation() const;
 
+  // Same but for `input` instead of GetInput().
+  HConstant* TryStaticEvaluation(HInstruction* input) const;
+
   // Apply this operation to `x`.
   virtual HConstant* Evaluate(HIntConstant* x) const = 0;
   virtual HConstant* Evaluate(HLongConstant* x) const = 0;
@@ -3911,6 +3915,9 @@ class HBinaryOperation : public HExpression<2> {
   // containing the result of this evaluation.  If `this` cannot
   // be evaluated as a constant, return null.
   HConstant* TryStaticEvaluation() const;
+
+  // Same but for `left` and `right` instead of GetLeft() and GetRight().
+  HConstant* TryStaticEvaluation(HInstruction* left, HInstruction* right) const;
 
   // Apply this operation to `x` and `y`.
   virtual HConstant* Evaluate(HNullConstant* x ATTRIBUTE_UNUSED,
@@ -6160,6 +6167,9 @@ class HTypeConversion final : public HExpression<1> {
   // containing the result.  If the input cannot be converted, return nullptr.
   HConstant* TryStaticEvaluation() const;
 
+  // Same but for `input` instead of GetInput().
+  HConstant* TryStaticEvaluation(HInstruction* input) const;
+
   DECLARE_INSTRUCTION(TypeConversion);
 
  protected:
@@ -7000,17 +7010,15 @@ class HLoadClass final : public HInstruction {
   bool CanCallRuntime() const {
     return NeedsAccessCheck() ||
            MustGenerateClinitCheck() ||
-           GetLoadKind() == LoadKind::kRuntimeCall ||
-           GetLoadKind() == LoadKind::kBssEntry;
+           NeedsBss() ||
+           GetLoadKind() == LoadKind::kRuntimeCall;
   }
 
   bool CanThrow() const override {
     return NeedsAccessCheck() ||
            MustGenerateClinitCheck() ||
            // If the class is in the boot image, the lookup in the runtime call cannot throw.
-           ((GetLoadKind() == LoadKind::kRuntimeCall ||
-             GetLoadKind() == LoadKind::kBssEntry) &&
-            !IsInBootImage());
+           ((GetLoadKind() == LoadKind::kRuntimeCall || NeedsBss()) && !IsInBootImage());
   }
 
   ReferenceTypeInfo GetLoadedClassRTI() {
@@ -8349,6 +8357,12 @@ class HSelect final : public HExpression<3> {
 
   bool CanBeNull() const override {
     return GetTrueValue()->CanBeNull() || GetFalseValue()->CanBeNull();
+  }
+
+  void UpdateType() {
+    DCHECK_EQ(HPhi::ToPhiType(GetTrueValue()->GetType()),
+              HPhi::ToPhiType(GetFalseValue()->GetType()));
+    SetPackedField<TypeField>(HPhi::ToPhiType(GetTrueValue()->GetType()));
   }
 
   DECLARE_INSTRUCTION(Select);

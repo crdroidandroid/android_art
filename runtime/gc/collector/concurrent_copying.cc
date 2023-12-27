@@ -391,7 +391,7 @@ void ConcurrentCopying::BindBitmaps() {
           // It is OK to clear the bitmap with mutators running since the only place it is read is
           // VisitObjects which has exclusion with CC.
           region_space_bitmap_ = region_space_->GetMarkBitmap();
-          region_space_bitmap_->Clear();
+          region_space_bitmap_->Clear(ShouldEagerlyReleaseMemoryToOS());
         }
       }
     }
@@ -461,9 +461,9 @@ void ConcurrentCopying::InitializePhase() {
     LOG(INFO) << "GC end of InitializePhase";
   }
   if (use_generational_cc_ && !young_gen_) {
-    region_space_bitmap_->Clear();
+    region_space_bitmap_->Clear(ShouldEagerlyReleaseMemoryToOS());
   }
-  mark_stack_mode_.store(ConcurrentCopying::kMarkStackModeThreadLocal, std::memory_order_relaxed);
+  mark_stack_mode_.store(ConcurrentCopying::kMarkStackModeThreadLocal, std::memory_order_release);
   // Mark all of the zygote large objects without graying them.
   MarkZygoteLargeObjects();
 }
@@ -478,9 +478,7 @@ class ConcurrentCopying::ThreadFlipVisitor : public Closure, public RootVisitor 
   void Run(Thread* thread) override REQUIRES_SHARED(Locks::mutator_lock_) {
     // Note: self is not necessarily equal to thread since thread may be suspended.
     Thread* self = Thread::Current();
-    CHECK(thread == self ||
-          thread->IsSuspended() ||
-          thread->GetState() == ThreadState::kWaitingPerformingGc)
+    CHECK(thread == self || thread->GetState() != ThreadState::kRunnable)
         << thread->GetState() << " thread " << thread << " self " << self;
     thread->SetIsGcMarkingAndUpdateEntrypoints(true);
     if (use_tlab_ && thread->HasTlab()) {
@@ -786,7 +784,7 @@ void ConcurrentCopying::FlipThreadRoots() {
     gc_barrier_->Increment(self, barrier_count);
   }
   is_asserting_to_space_invariant_ = true;
-  QuasiAtomic::ThreadFenceForConstructor();
+  QuasiAtomic::ThreadFenceForConstructor();  // TODO: Remove?
   if (kVerboseMode) {
     LOG(INFO) << "time=" << region_space_->Time();
     region_space_->DumpNonFreeRegions(LOG_STREAM(INFO));
@@ -925,9 +923,11 @@ class ConcurrentCopying::ImmuneSpaceScanObjVisitor {
       // Only need to scan gray objects.
       if (obj->GetReadBarrierState() == ReadBarrier::GrayState()) {
         collector_->ScanImmuneObject(obj);
-        // Done scanning the object, go back to black (non-gray).
-        bool success = obj->AtomicSetReadBarrierState(ReadBarrier::GrayState(),
-                                                      ReadBarrier::NonGrayState());
+        // Done scanning the object, go back to black (non-gray). Release order
+        // required to ensure that stores of to-space references done by
+        // ScanImmuneObject() are visible before state change.
+        bool success = obj->AtomicSetReadBarrierState(
+            ReadBarrier::GrayState(), ReadBarrier::NonGrayState(), std::memory_order_release);
         CHECK(success)
             << Runtime::Current()->GetHeap()->GetVerification()->DumpObjectInfo(obj, "failed CAS");
       }
@@ -1817,8 +1817,10 @@ void ConcurrentCopying::DisableMarking() {
     heap_->rb_table_->ClearAll();
     DCHECK(heap_->rb_table_->IsAllCleared());
   }
-  is_mark_stack_push_disallowed_.store(1, std::memory_order_seq_cst);
-  mark_stack_mode_.store(kMarkStackModeOff, std::memory_order_seq_cst);
+  if (kIsDebugBuild) {
+    is_mark_stack_push_disallowed_.store(1, std::memory_order_relaxed);
+  }
+  mark_stack_mode_.store(kMarkStackModeOff, std::memory_order_release);
 }
 
 void ConcurrentCopying::IssueEmptyCheckpoint() {
@@ -1843,10 +1845,10 @@ void ConcurrentCopying::ExpandGcMarkStack() {
 }
 
 void ConcurrentCopying::PushOntoMarkStack(Thread* const self, mirror::Object* to_ref) {
-  CHECK_EQ(is_mark_stack_push_disallowed_.load(std::memory_order_relaxed), 0)
+  DCHECK_EQ(is_mark_stack_push_disallowed_.load(std::memory_order_relaxed), 0)
       << " " << to_ref << " " << mirror::Object::PrettyTypeOf(to_ref);
   CHECK(thread_running_gc_ != nullptr);
-  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_relaxed);
+  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_acquire);
   if (LIKELY(mark_stack_mode == kMarkStackModeThreadLocal)) {
     if (LIKELY(self == thread_running_gc_)) {
       // If GC-running thread, use the GC mark stack instead of a thread-local mark stack.
@@ -2149,7 +2151,7 @@ bool ConcurrentCopying::ProcessMarkStackOnce() {
   DCHECK(self == thread_running_gc_);
   DCHECK(thread_running_gc_->GetThreadLocalMarkStack() == nullptr);
   size_t count = 0;
-  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_relaxed);
+  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_acquire);
   if (mark_stack_mode == kMarkStackModeThreadLocal) {
     // Process the thread-local mark stacks and the GC mark stack.
     count += ProcessThreadLocalMarkStacks(/* disable_weak_ref_access= */ false,
@@ -2380,9 +2382,8 @@ inline void ConcurrentCopying::ProcessMarkStackRef(mirror::Object* to_ref) {
     // above IsInToSpace() evaluates to true and we change the color from gray to non-gray here in
     // this else block.
     if (kUseBakerReadBarrier) {
-      bool success = to_ref->AtomicSetReadBarrierState<std::memory_order_release>(
-          ReadBarrier::GrayState(),
-          ReadBarrier::NonGrayState());
+      bool success = to_ref->AtomicSetReadBarrierState(
+          ReadBarrier::GrayState(), ReadBarrier::NonGrayState(), std::memory_order_release);
       DCHECK(success) << "Must succeed as we won the race.";
     }
   }
@@ -2433,10 +2434,9 @@ void ConcurrentCopying::SwitchToSharedMarkStackMode() {
   DCHECK(thread_running_gc_ != nullptr);
   DCHECK(self == thread_running_gc_);
   DCHECK(thread_running_gc_->GetThreadLocalMarkStack() == nullptr);
-  MarkStackMode before_mark_stack_mode = mark_stack_mode_.load(std::memory_order_relaxed);
-  CHECK_EQ(static_cast<uint32_t>(before_mark_stack_mode),
+  CHECK_EQ(static_cast<uint32_t>(mark_stack_mode_.load(std::memory_order_relaxed)),
            static_cast<uint32_t>(kMarkStackModeThreadLocal));
-  mark_stack_mode_.store(kMarkStackModeShared, std::memory_order_relaxed);
+  mark_stack_mode_.store(kMarkStackModeShared, std::memory_order_release);
   DisableWeakRefAccessCallback dwrac(this);
   // Process the thread local mark stacks one last time after switching to the shared mark stack
   // mode and disable weak ref accesses.
@@ -2456,11 +2456,9 @@ void ConcurrentCopying::SwitchToGcExclusiveMarkStackMode() {
   DCHECK(thread_running_gc_ != nullptr);
   DCHECK(self == thread_running_gc_);
   DCHECK(thread_running_gc_->GetThreadLocalMarkStack() == nullptr);
-  MarkStackMode before_mark_stack_mode = mark_stack_mode_.load(std::memory_order_relaxed);
-  CHECK_EQ(static_cast<uint32_t>(before_mark_stack_mode),
+  CHECK_EQ(static_cast<uint32_t>(mark_stack_mode_.load(std::memory_order_relaxed)),
            static_cast<uint32_t>(kMarkStackModeShared));
-  mark_stack_mode_.store(kMarkStackModeGcExclusive, std::memory_order_relaxed);
-  QuasiAtomic::ThreadFenceForConstructor();
+  mark_stack_mode_.store(kMarkStackModeGcExclusive, std::memory_order_release);
   if (kVerboseMode) {
     LOG(INFO) << "Switched to GC exclusive mark stack mode";
   }
@@ -2471,7 +2469,7 @@ void ConcurrentCopying::CheckEmptyMarkStack() {
   DCHECK(thread_running_gc_ != nullptr);
   DCHECK(self == thread_running_gc_);
   DCHECK(thread_running_gc_->GetThreadLocalMarkStack() == nullptr);
-  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_relaxed);
+  MarkStackMode mark_stack_mode = mark_stack_mode_.load(std::memory_order_acquire);
   if (mark_stack_mode == kMarkStackModeThreadLocal) {
     // Thread-local mark stack mode.
     RevokeThreadLocalMarkStacks(false, nullptr);
@@ -2741,13 +2739,15 @@ void ConcurrentCopying::ReclaimPhase() {
     // Double-check that the mark stack is empty.
     // Note: need to set this after VerifyNoFromSpaceRef().
     is_asserting_to_space_invariant_ = false;
-    QuasiAtomic::ThreadFenceForConstructor();
+    QuasiAtomic::ThreadFenceForConstructor();  // TODO: Remove?
     if (kVerboseMode) {
       LOG(INFO) << "Issue an empty check point. ";
     }
     IssueEmptyCheckpoint();
     // Disable the check.
-    is_mark_stack_push_disallowed_.store(0, std::memory_order_seq_cst);
+    if (kIsDebugBuild) {
+      is_mark_stack_push_disallowed_.store(0, std::memory_order_relaxed);
+    }
     if (kUseBakerReadBarrier) {
       updated_all_immune_objects_.store(false, std::memory_order_seq_cst);
     }
@@ -2803,14 +2803,26 @@ void ConcurrentCopying::ReclaimPhase() {
     // Cleared bytes and objects, populated by the call to RegionSpace::ClearFromSpace below.
     uint64_t cleared_bytes;
     uint64_t cleared_objects;
+    bool should_eagerly_release_memory = ShouldEagerlyReleaseMemoryToOS();
     {
       TimingLogger::ScopedTiming split4("ClearFromSpace", GetTimings());
-      region_space_->ClearFromSpace(&cleared_bytes, &cleared_objects, /*clear_bitmap*/ !young_gen_);
+      region_space_->ClearFromSpace(&cleared_bytes,
+                                    &cleared_objects,
+                                    /*clear_bitmap*/ !young_gen_,
+                                    should_eagerly_release_memory);
       // `cleared_bytes` and `cleared_objects` may be greater than the from space equivalents since
       // RegionSpace::ClearFromSpace may clear empty unevac regions.
       CHECK_GE(cleared_bytes, from_bytes);
       CHECK_GE(cleared_objects, from_objects);
     }
+
+    // If we need to release available memory to the OS, go over all free
+    // regions which the kernel might still cache.
+    if (should_eagerly_release_memory) {
+      TimingLogger::ScopedTiming split4("Release free regions", GetTimings());
+      region_space_->ReleaseFreeRegions();
+    }
+
     // freed_bytes could conceivably be negative if we fall back to nonmoving space and have to
     // pad to a larger size.
     int64_t freed_bytes = (int64_t)cleared_bytes - (int64_t)to_bytes;
@@ -3769,6 +3781,7 @@ void ConcurrentCopying::FinishPhase() {
     CHECK(revoked_mark_stacks_.empty());
     CHECK_EQ(pooled_mark_stacks_.size(), kMarkStackPoolSize);
   }
+  bool should_eagerly_release_memory = ShouldEagerlyReleaseMemoryToOS();
   // kVerifyNoMissingCardMarks relies on the region space cards not being cleared to avoid false
   // positives.
   if (!kVerifyNoMissingCardMarks && !use_generational_cc_) {
@@ -3776,8 +3789,8 @@ void ConcurrentCopying::FinishPhase() {
     // We do not currently use the region space cards at all, madvise them away to save ram.
     heap_->GetCardTable()->ClearCardRange(region_space_->Begin(), region_space_->Limit());
   } else if (use_generational_cc_ && !young_gen_) {
-    region_space_inter_region_bitmap_.Clear();
-    non_moving_space_inter_region_bitmap_.Clear();
+    region_space_inter_region_bitmap_.Clear(should_eagerly_release_memory);
+    non_moving_space_inter_region_bitmap_.Clear(should_eagerly_release_memory);
   }
   {
     MutexLock mu(self, skipped_blocks_lock_);
@@ -3787,7 +3800,7 @@ void ConcurrentCopying::FinishPhase() {
     ReaderMutexLock mu(self, *Locks::mutator_lock_);
     {
       WriterMutexLock mu2(self, *Locks::heap_bitmap_lock_);
-      heap_->ClearMarkedObjects();
+      heap_->ClearMarkedObjects(should_eagerly_release_memory);
     }
     if (kUseBakerReadBarrier && kFilterModUnionCards) {
       TimingLogger::ScopedTiming split("FilterModUnionCards", GetTimings());

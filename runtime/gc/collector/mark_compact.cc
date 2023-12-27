@@ -290,7 +290,7 @@ static constexpr size_t kMaxNumUffdWorkers = 2;
 // of mutator threads trying to access the moving-space during one compaction
 // phase. Using a lower number in debug builds to hopefully catch the issue
 // before it becomes a problem on user builds.
-static constexpr size_t kMutatorCompactionBufferCount = kIsDebugBuild ? 256 : 512;
+static constexpr size_t kMutatorCompactionBufferCount = kIsDebugBuild ? 256 : 2048;
 // Minimum from-space chunk to be madvised (during concurrent compaction) in one go.
 static constexpr ssize_t kMinFromSpaceMadviseSize = 1 * MB;
 // Concurrent compaction termination logic is different (and slightly more efficient) if the
@@ -1674,14 +1674,13 @@ void MarkCompact::CompactPage(mirror::Object* obj,
 // If we find a set bit in the bitmap, then we copy the remaining page and then
 // use the bitmap to visit each object for updating references.
 void MarkCompact::SlideBlackPage(mirror::Object* first_obj,
-                                 const size_t page_idx,
+                                 mirror::Object* next_page_first_obj,
+                                 uint32_t first_chunk_size,
                                  uint8_t* const pre_compact_page,
                                  uint8_t* dest,
                                  bool needs_memset_zero) {
   DCHECK(IsAligned<kPageSize>(pre_compact_page));
   size_t bytes_copied;
-  const uint32_t first_chunk_size = black_alloc_pages_first_chunk_size_[page_idx];
-  mirror::Object* next_page_first_obj = first_objs_moving_space_[page_idx + 1].AsMirrorPtr();
   uint8_t* src_addr = reinterpret_cast<uint8_t*>(GetFromSpaceAddr(first_obj));
   uint8_t* pre_compact_addr = reinterpret_cast<uint8_t*>(first_obj);
   uint8_t* const pre_compact_page_end = pre_compact_page + kPageSize;
@@ -1846,15 +1845,16 @@ void MarkCompact::SlideBlackPage(mirror::Object* first_obj,
     DCHECK_GT(reinterpret_cast<uint8_t*>(found_obj), pre_compact_addr);
     DCHECK_LT(reinterpret_cast<uintptr_t>(found_obj), page_end);
     ptrdiff_t diff = reinterpret_cast<uint8_t*>(found_obj) - pre_compact_addr;
-    mirror::Object* ref = reinterpret_cast<mirror::Object*>(dest + diff);
-    VerifyObject(ref, verify_obj_callback);
-    RefsUpdateVisitor</*kCheckBegin*/false, /*kCheckEnd*/true> visitor(this,
-                                                                       ref,
-                                                                       nullptr,
-                                                                       dest_page_end);
-    ref->VisitRefsForCompaction</*kFetchObjSize*/false>(
-            visitor, MemberOffset(0), MemberOffset(page_end -
-                                                   reinterpret_cast<uintptr_t>(found_obj)));
+    mirror::Object* dest_obj = reinterpret_cast<mirror::Object*>(dest + diff);
+    VerifyObject(dest_obj, verify_obj_callback);
+    RefsUpdateVisitor</*kCheckBegin*/ false, /*kCheckEnd*/ true> visitor(
+        this, dest_obj, nullptr, dest_page_end);
+    // Last object could overlap with next page. And if it happens to be a
+    // class, then we may access something (like static-fields' offsets) which
+    // is on the next page. Therefore, use from-space's reference.
+    mirror::Object* obj = GetFromSpaceAddr(found_obj);
+    obj->VisitRefsForCompaction</*kFetchObjSize*/ false>(
+        visitor, MemberOffset(0), MemberOffset(page_end - reinterpret_cast<uintptr_t>(found_obj)));
   }
 }
 
@@ -2200,6 +2200,7 @@ void MarkCompact::CompactMovingSpace(uint8_t* page) {
   last_checked_reclaim_page_idx_ = idx;
   class_after_obj_iter_ = class_after_obj_ordered_map_.rbegin();
   // Allocated-black pages
+  mirror::Object* next_page_first_obj = nullptr;
   while (idx > moving_first_objs_count_) {
     idx--;
     pre_compact_page -= kPageSize;
@@ -2211,21 +2212,27 @@ void MarkCompact::CompactMovingSpace(uint8_t* page) {
       page = to_space_end;
     }
     mirror::Object* first_obj = first_objs_moving_space_[idx].AsMirrorPtr();
+    uint32_t first_chunk_size = black_alloc_pages_first_chunk_size_[idx];
     if (first_obj != nullptr) {
-      DoPageCompactionWithStateChange<kMode>(
-          idx,
-          page_status_arr_len,
-          to_space_end,
-          page,
-          [&]() REQUIRES_SHARED(Locks::mutator_lock_) {
-            SlideBlackPage(first_obj, idx, pre_compact_page, page, kMode == kCopyMode);
-          });
+      DoPageCompactionWithStateChange<kMode>(idx,
+                                             page_status_arr_len,
+                                             to_space_end,
+                                             page,
+                                             [&]() REQUIRES_SHARED(Locks::mutator_lock_) {
+                                               SlideBlackPage(first_obj,
+                                                              next_page_first_obj,
+                                                              first_chunk_size,
+                                                              pre_compact_page,
+                                                              page,
+                                                              kMode == kCopyMode);
+                                             });
       // We are sliding here, so no point attempting to madvise for every
       // page. Wait for enough pages to be done.
       if (idx % (kMinFromSpaceMadviseSize / kPageSize) == 0) {
         FreeFromSpacePages(idx, kMode);
       }
     }
+    next_page_first_obj = first_obj;
   }
   DCHECK_EQ(pre_compact_page, black_allocations_begin_);
 
@@ -3136,6 +3143,7 @@ void MarkCompact::ConcurrentlyProcessMovingPage(uint8_t* fault_page,
     return;
   }
   size_t page_idx = (fault_page - bump_pointer_space_->Begin()) / kPageSize;
+  DCHECK_LT(page_idx, moving_first_objs_count_ + black_page_count_);
   mirror::Object* first_obj = first_objs_moving_space_[page_idx].AsMirrorPtr();
   if (first_obj == nullptr) {
     // We should never have a case where two workers are trying to install a
@@ -3189,8 +3197,18 @@ void MarkCompact::ConcurrentlyProcessMovingPage(uint8_t* fault_page,
             DCHECK_NE(first_obj, nullptr);
             DCHECK_GT(pre_compact_offset_moving_space_[page_idx], 0u);
             uint8_t* pre_compact_page = black_allocations_begin_ + (fault_page - post_compact_end_);
+            uint32_t first_chunk_size = black_alloc_pages_first_chunk_size_[page_idx];
+            mirror::Object* next_page_first_obj = nullptr;
+            if (page_idx + 1 < moving_first_objs_count_ + black_page_count_) {
+              next_page_first_obj = first_objs_moving_space_[page_idx + 1].AsMirrorPtr();
+            }
             DCHECK(IsAligned<kPageSize>(pre_compact_page));
-            SlideBlackPage(first_obj, page_idx, pre_compact_page, buf, kMode == kCopyMode);
+            SlideBlackPage(first_obj,
+                           next_page_first_obj,
+                           first_chunk_size,
+                           pre_compact_page,
+                           buf,
+                           kMode == kCopyMode);
           }
           // Nobody else would simultaneously modify this page's state so an
           // atomic store is sufficient. Use 'release' order to guarantee that
@@ -3467,7 +3485,7 @@ void MarkCompact::ProcessLinearAlloc() {
     // processing any pages in this arena, then we can madvise the shadow size.
     // Otherwise, we will double the memory use for linear-alloc.
     if (!minor_fault_initialized_ && !others_processing) {
-      ZeroAndReleasePages(arena_begin + diff, arena_size);
+      ZeroAndReleaseMemory(arena_begin + diff, arena_size);
     }
   }
 }
@@ -3514,9 +3532,30 @@ void MarkCompact::CompactionPhase() {
     RecordFree(ObjectBytePair(freed_objects_, freed_bytes));
   }
 
+  size_t moving_space_size = bump_pointer_space_->Capacity();
+  size_t used_size = (moving_first_objs_count_ + black_page_count_) * kPageSize;
   if (CanCompactMovingSpaceWithMinorFault()) {
     CompactMovingSpace<kMinorFaultMode>(/*page=*/nullptr);
   } else {
+    if (used_size < moving_space_size) {
+      // mremap clears 'anon_vma' field of anonymous mappings. If we
+      // uffd-register only the used portion of the space, then the vma gets
+      // split (between used and unused portions) and as soon as pages are
+      // mapped to the vmas, they get different `anon_vma` assigned, which
+      // ensures that the two vmas cannot merged after we uffd-unregister the
+      // used portion. OTOH, registering the entire space avoids the split, but
+      // unnecessarily causes userfaults on allocations.
+      // By mapping a zero-page (below) we let the kernel assign an 'anon_vma'
+      // *before* the vma-split caused by uffd-unregister of the unused portion
+      // This ensures that when we unregister the used portion after compaction,
+      // the two split vmas merge. This is necessary for the mremap of the
+      // next GC cycle to not fail due to having more than one vmas in the source
+      // range.
+      uint8_t* unused_first_page = bump_pointer_space_->Begin() + used_size;
+      // It's ok if somebody else already mapped the page.
+      ZeropageIoctl(unused_first_page, /*tolerate_eexist*/ true, /*tolerate_enoent*/ false);
+      UnregisterUffd(unused_first_page, moving_space_size - used_size);
+    }
     CompactMovingSpace<kCopyMode>(compaction_buffers_map_.Begin());
   }
 
@@ -3530,13 +3569,9 @@ void MarkCompact::CompactionPhase() {
   for (uint32_t i = 0; compaction_in_progress_count_.load(std::memory_order_acquire) > 0; i++) {
     BackOff(i);
   }
-
-  size_t moving_space_size = bump_pointer_space_->Capacity();
-  UnregisterUffd(bump_pointer_space_->Begin(),
-                 minor_fault_initialized_ ?
-                     (moving_first_objs_count_ + black_page_count_) * kPageSize :
-                     moving_space_size);
-
+  if (used_size > 0) {
+    UnregisterUffd(bump_pointer_space_->Begin(), used_size);
+  }
   // Release all of the memory taken by moving-space's from-map
   if (minor_fault_initialized_) {
     if (IsValidFd(moving_from_space_fd_)) {
@@ -3593,7 +3628,7 @@ void MarkCompact::CompactionPhase() {
     // We will only iterate once if gKernelHasFaultRetry is true.
     do {
       // madvise the page so that we can get userfaults on it.
-      ZeroAndReleasePages(conc_compaction_termination_page_, kPageSize);
+      ZeroAndReleaseMemory(conc_compaction_termination_page_, kPageSize);
       // The following load triggers 'special' userfaults. When received by the
       // thread-pool workers, they will exit out of the compaction task. This fault
       // happens because we madvised the page.
@@ -4247,8 +4282,8 @@ void MarkCompact::FinishPhase() {
   if (use_uffd_sigbus_ || !minor_fault_initialized_ || !shadow_to_space_map_.IsValid() ||
       shadow_to_space_map_.Size() < (moving_first_objs_count_ + black_page_count_) * kPageSize) {
     size_t adjustment = use_uffd_sigbus_ ? 0 : kPageSize;
-    ZeroAndReleasePages(compaction_buffers_map_.Begin() + adjustment,
-                        compaction_buffers_map_.Size() - adjustment);
+    ZeroAndReleaseMemory(compaction_buffers_map_.Begin() + adjustment,
+                         compaction_buffers_map_.Size() - adjustment);
   } else if (shadow_to_space_map_.Size() == bump_pointer_space_->Capacity()) {
     // Now that we are going to use minor-faults from next GC cycle, we can
     // unmap the buffers used by worker threads.

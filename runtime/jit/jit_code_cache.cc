@@ -261,7 +261,6 @@ JitCodeCache::JitCodeCache()
       zygote_map_(&shared_region_),
       lock_cond_("Jit code cache condition variable", *Locks::jit_lock_),
       collection_in_progress_(false),
-      last_collection_increased_code_cache_(false),
       garbage_collect_code_(true),
       number_of_baseline_compilations_(0),
       number_of_optimized_compilations_(0),
@@ -1098,23 +1097,6 @@ bool JitCodeCache::IsAtMaxCapacity() const {
   return private_region_.GetCurrentCapacity() == private_region_.GetMaxCapacity();
 }
 
-bool JitCodeCache::ShouldDoFullCollection() {
-  if (IsAtMaxCapacity()) {
-    // Always do a full collection when the code cache is full.
-    return true;
-  } else if (private_region_.GetCurrentCapacity() < kReservedCapacity) {
-    // Always do partial collection when the code cache size is below the reserved
-    // capacity.
-    return false;
-  } else if (last_collection_increased_code_cache_) {
-    // This time do a full collection.
-    return true;
-  } else {
-    // This time do a partial collection.
-    return false;
-  }
-}
-
 void JitCodeCache::GarbageCollectCache(Thread* self) {
   ScopedTrace trace(__FUNCTION__);
   // Wait for an existing collection, or let everyone know we are starting one.
@@ -1141,19 +1123,11 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
   {
     TimingLogger::ScopedTiming st("Code cache collection", &logger);
 
-    bool do_full_collection = false;
-    {
-      MutexLock mu(self, *Locks::jit_lock_);
-      do_full_collection = ShouldDoFullCollection();
-    }
-
-    VLOG(jit) << "Do "
-              << (do_full_collection ? "full" : "partial")
-              << " code cache collection, code="
+    VLOG(jit) << "Do code cache collection, code="
               << PrettySize(CodeCacheSize())
               << ", data=" << PrettySize(DataCacheSize());
 
-    DoCollection(self, /* collect_profiling_info= */ do_full_collection);
+    DoCollection(self);
 
     VLOG(jit) << "After code cache collection, code="
               << PrettySize(CodeCacheSize())
@@ -1161,43 +1135,7 @@ void JitCodeCache::GarbageCollectCache(Thread* self) {
 
     {
       MutexLock mu(self, *Locks::jit_lock_);
-
-      // Increase the code cache only when we do partial collections.
-      // TODO: base this strategy on how full the code cache is?
-      if (do_full_collection) {
-        last_collection_increased_code_cache_ = false;
-      } else {
-        last_collection_increased_code_cache_ = true;
-        private_region_.IncreaseCodeCacheCapacity();
-      }
-
-      bool next_collection_will_be_full = ShouldDoFullCollection();
-
-      // Start polling the liveness of compiled code to prepare for the next full collection.
-      if (next_collection_will_be_full) {
-        ScopedDebugDisallowReadBarriers sddrb(self);
-        for (auto it : profiling_infos_) {
-          it.second->ResetCounter();
-        }
-
-        // Change entry points of native methods back to the GenericJNI entrypoint.
-        for (const auto& entry : jni_stubs_map_) {
-          const JniStubData& data = entry.second;
-          if (!data.IsCompiled() || IsInZygoteExecSpace(data.GetCode())) {
-            continue;
-          }
-          const OatQuickMethodHeader* method_header =
-              OatQuickMethodHeader::FromCodePointer(data.GetCode());
-          for (ArtMethod* method : data.GetMethods()) {
-            if (method->GetEntryPointFromQuickCompiledCode() == method_header->GetEntryPoint()) {
-              // Don't call Instrumentation::UpdateMethodsCode(), same as for normal methods above.
-              // Make sure a single invocation of the GenericJNI trampoline tries to recompile.
-              method->SetHotCounter();
-              method->SetEntryPointFromQuickCompiledCode(GetQuickGenericJniStub());
-            }
-          }
-        }
-      }
+      private_region_.IncreaseCodeCacheCapacity();
       live_bitmap_.reset(nullptr);
       NotifyCollectionDone(self);
     }
@@ -1317,6 +1255,21 @@ ProfilingInfo* JitCodeCache::GetProfilingInfo(ArtMethod* method, Thread* self) {
   return it->second;
 }
 
+void JitCodeCache::MaybeUpdateInlineCache(ArtMethod* method,
+                                          uint32_t dex_pc,
+                                          ObjPtr<mirror::Class> cls,
+                                          Thread* self) {
+  ScopedDebugDisallowReadBarriers sddrb(self);
+  MutexLock mu(self, *Locks::jit_lock_);
+  auto it = profiling_infos_.find(method);
+  if (it == profiling_infos_.end()) {
+    return;
+  }
+  ProfilingInfo* info = it->second;
+  ScopedAssertNoThreadSuspension sants("ProfilingInfo");
+  info->AddInvokeInfo(dex_pc, cls.Ptr());
+}
+
 void JitCodeCache::ResetHotnessCounter(ArtMethod* method, Thread* self) {
   ScopedDebugDisallowReadBarriers sddrb(self);
   MutexLock mu(self, *Locks::jit_lock_);
@@ -1326,35 +1279,11 @@ void JitCodeCache::ResetHotnessCounter(ArtMethod* method, Thread* self) {
 }
 
 
-void JitCodeCache::DoCollection(Thread* self, bool collect_profiling_info) {
+void JitCodeCache::DoCollection(Thread* self) {
   ScopedTrace trace(__FUNCTION__);
   {
     ScopedDebugDisallowReadBarriers sddrb(self);
     MutexLock mu(self, *Locks::jit_lock_);
-
-    // Update to interpreter the methods that have baseline entrypoints and whose baseline
-    // hotness count hasn't changed.
-    // Note that these methods may be in thread stack or concurrently revived
-    // between. That's OK, as the thread executing it will mark it.
-    uint16_t warmup_threshold = Runtime::Current()->GetJITOptions()->GetWarmupThreshold();
-    for (auto it : profiling_infos_) {
-      ProfilingInfo* info = it.second;
-      if (!info->CounterHasChanged()) {
-        const void* entry_point = info->GetMethod()->GetEntryPointFromQuickCompiledCode();
-        if (ContainsPc(entry_point)) {
-          OatQuickMethodHeader* method_header =
-              OatQuickMethodHeader::FromEntryPoint(entry_point);
-          if (CodeInfo::IsBaseline(method_header->GetOptimizedCodeInfoPtr())) {
-            info->GetMethod()->ResetCounter(warmup_threshold);
-            Runtime::Current()->GetInstrumentation()->InitializeMethodsCode(
-                info->GetMethod(), /*aot_code=*/ nullptr);
-          }
-        }
-      }
-    }
-    // TODO: collect profiling info
-    // TODO: collect optimized code
-
     // Mark compiled code that are entrypoints of ArtMethods. Compiled code that is not
     // an entry point is either:
     // - an osr compiled code, that will be removed if not in a thread call stack.
@@ -1397,10 +1326,6 @@ void JitCodeCache::DoCollection(Thread* self, bool collect_profiling_info) {
   // change. We do know they cannot change to a code cache entry that is not marked,
   // therefore we can safely remove those entries.
   RemoveUnmarkedCode(self);
-
-  if (collect_profiling_info) {
-    // TODO: Collect unused profiling infos.
-  }
 }
 
 OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* method) {
@@ -1536,7 +1461,8 @@ void* JitCodeCache::MoreCore(const void* mspace, intptr_t increment) {
 }
 
 void JitCodeCache::GetProfiledMethods(const std::set<std::string>& dex_base_locations,
-                                      std::vector<ProfileMethodInfo>& methods) {
+                                      std::vector<ProfileMethodInfo>& methods,
+                                      uint16_t inline_cache_threshold) {
   Thread* self = Thread::Current();
   WaitUntilInlineCacheAccessible(self);
   // TODO: Avoid read barriers for potentially dead methods.
@@ -1555,13 +1481,17 @@ void JitCodeCache::GetProfiledMethods(const std::set<std::string>& dex_base_loca
     }
     std::vector<ProfileMethodInfo::ProfileInlineCache> inline_caches;
 
-    // If the method is still baseline compiled, don't save the inline caches.
-    // They might be incomplete and cause unnecessary deoptimizations.
+    // If the method is still baseline compiled and doesn't meet the inline cache threshold, don't
+    // save the inline caches because they might be incomplete.
+    // Although we don't deoptimize for incomplete inline caches in AOT-compiled code, inlining
+    // leads to larger generated code.
     // If the inline cache is empty the compiler will generate a regular invoke virtual/interface.
     const void* entry_point = method->GetEntryPointFromQuickCompiledCode();
     if (ContainsPc(entry_point) &&
         CodeInfo::IsBaseline(
-            OatQuickMethodHeader::FromEntryPoint(entry_point)->GetOptimizedCodeInfoPtr())) {
+            OatQuickMethodHeader::FromEntryPoint(entry_point)->GetOptimizedCodeInfoPtr()) &&
+        (ProfilingInfo::GetOptimizeThreshold() - info->GetBaselineHotnessCount()) <
+            inline_cache_threshold) {
       methods.emplace_back(/*ProfileMethodInfo*/
           MethodReference(dex_file, method->GetDexMethodIndex()), inline_caches);
       continue;
@@ -1800,7 +1730,22 @@ void JitCodeCache::InvalidateAllCompiledCode() {
   Runtime* runtime = Runtime::Current();
   ClassLinker* linker = runtime->GetClassLinker();
   instrumentation::Instrumentation* instr = runtime->GetInstrumentation();
-  // TODO: Clear `jni_stubs_map_`?
+
+  // Change entry points of native methods back to the GenericJNI entrypoint.
+  for (const auto& entry : jni_stubs_map_) {
+    const JniStubData& data = entry.second;
+    if (!data.IsCompiled() || IsInZygoteExecSpace(data.GetCode())) {
+      continue;
+    }
+    const OatQuickMethodHeader* method_header =
+        OatQuickMethodHeader::FromCodePointer(data.GetCode());
+    for (ArtMethod* method : data.GetMethods()) {
+      if (method->GetEntryPointFromQuickCompiledCode() == method_header->GetEntryPoint()) {
+        ClearMethodCounter(method, /*was_warm=*/true);
+        instr->InitializeMethodsCode(method, /*aot_code=*/ nullptr);
+      }
+    }
+  }
   for (const auto& entry : method_code_map_) {
     ArtMethod* meth = entry.second;
     // We were compiled, so we must be warm.
@@ -1819,8 +1764,7 @@ void JitCodeCache::InvalidateAllCompiledCode() {
     if (entry.method->IsPreCompiled()) {
       entry.method->ClearPreCompiled();
     }
-    Runtime::Current()->GetInstrumentation()->InitializeMethodsCode(entry.method,
-                                                                    /*aot_code=*/nullptr);
+    instr->InitializeMethodsCode(entry.method, /*aot_code=*/nullptr);
   }
 
   saved_compiled_methods_map_.clear();

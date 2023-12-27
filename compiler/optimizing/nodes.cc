@@ -254,6 +254,14 @@ GraphAnalysisResult HGraph::BuildDominatorTree() {
   return kAnalysisSuccess;
 }
 
+GraphAnalysisResult HGraph::RecomputeDominatorTree() {
+  DCHECK(!HasIrreducibleLoops()) << "Recomputing loop information in graphs with irreducible loops "
+                                 << "is unsupported, as it could lead to loop header changes";
+  ClearLoopInformation();
+  ClearDominanceInformation();
+  return BuildDominatorTree();
+}
+
 void HGraph::ClearDominanceInformation() {
   for (HBasicBlock* block : GetActiveBlocks()) {
     block->ClearDominanceInformation();
@@ -1488,11 +1496,11 @@ bool HInstructionList::FoundBefore(const HInstruction* instruction1,
                                    const HInstruction* instruction2) const {
   DCHECK_EQ(instruction1->GetBlock(), instruction2->GetBlock());
   for (HInstructionIterator it(*this); !it.Done(); it.Advance()) {
-    if (it.Current() == instruction1) {
-      return true;
-    }
     if (it.Current() == instruction2) {
       return false;
+    }
+    if (it.Current() == instruction1) {
+      return true;
     }
   }
   LOG(FATAL) << "Did not find an order between two instructions of the same block.";
@@ -1815,10 +1823,12 @@ void HGraphVisitor::VisitBasicBlock(HBasicBlock* block) {
   }
 }
 
-HConstant* HTypeConversion::TryStaticEvaluation() const {
-  HGraph* graph = GetBlock()->GetGraph();
-  if (GetInput()->IsIntConstant()) {
-    int32_t value = GetInput()->AsIntConstant()->GetValue();
+HConstant* HTypeConversion::TryStaticEvaluation() const { return TryStaticEvaluation(GetInput()); }
+
+HConstant* HTypeConversion::TryStaticEvaluation(HInstruction* input) const {
+  HGraph* graph = input->GetBlock()->GetGraph();
+  if (input->IsIntConstant()) {
+    int32_t value = input->AsIntConstant()->GetValue();
     switch (GetResultType()) {
       case DataType::Type::kInt8:
         return graph->GetIntConstant(static_cast<int8_t>(value), GetDexPc());
@@ -1837,8 +1847,8 @@ HConstant* HTypeConversion::TryStaticEvaluation() const {
       default:
         return nullptr;
     }
-  } else if (GetInput()->IsLongConstant()) {
-    int64_t value = GetInput()->AsLongConstant()->GetValue();
+  } else if (input->IsLongConstant()) {
+    int64_t value = input->AsLongConstant()->GetValue();
     switch (GetResultType()) {
       case DataType::Type::kInt8:
         return graph->GetIntConstant(static_cast<int8_t>(value), GetDexPc());
@@ -1857,8 +1867,8 @@ HConstant* HTypeConversion::TryStaticEvaluation() const {
       default:
         return nullptr;
     }
-  } else if (GetInput()->IsFloatConstant()) {
-    float value = GetInput()->AsFloatConstant()->GetValue();
+  } else if (input->IsFloatConstant()) {
+    float value = input->AsFloatConstant()->GetValue();
     switch (GetResultType()) {
       case DataType::Type::kInt32:
         if (std::isnan(value))
@@ -1881,8 +1891,8 @@ HConstant* HTypeConversion::TryStaticEvaluation() const {
       default:
         return nullptr;
     }
-  } else if (GetInput()->IsDoubleConstant()) {
-    double value = GetInput()->AsDoubleConstant()->GetValue();
+  } else if (input->IsDoubleConstant()) {
+    double value = input->AsDoubleConstant()->GetValue();
     switch (GetResultType()) {
       case DataType::Type::kInt32:
         if (std::isnan(value))
@@ -1909,41 +1919,47 @@ HConstant* HTypeConversion::TryStaticEvaluation() const {
   return nullptr;
 }
 
-HConstant* HUnaryOperation::TryStaticEvaluation() const {
-  if (GetInput()->IsIntConstant()) {
-    return Evaluate(GetInput()->AsIntConstant());
-  } else if (GetInput()->IsLongConstant()) {
-    return Evaluate(GetInput()->AsLongConstant());
+HConstant* HUnaryOperation::TryStaticEvaluation() const { return TryStaticEvaluation(GetInput()); }
+
+HConstant* HUnaryOperation::TryStaticEvaluation(HInstruction* input) const {
+  if (input->IsIntConstant()) {
+    return Evaluate(input->AsIntConstant());
+  } else if (input->IsLongConstant()) {
+    return Evaluate(input->AsLongConstant());
   } else if (kEnableFloatingPointStaticEvaluation) {
-    if (GetInput()->IsFloatConstant()) {
-      return Evaluate(GetInput()->AsFloatConstant());
-    } else if (GetInput()->IsDoubleConstant()) {
-      return Evaluate(GetInput()->AsDoubleConstant());
+    if (input->IsFloatConstant()) {
+      return Evaluate(input->AsFloatConstant());
+    } else if (input->IsDoubleConstant()) {
+      return Evaluate(input->AsDoubleConstant());
     }
   }
   return nullptr;
 }
 
 HConstant* HBinaryOperation::TryStaticEvaluation() const {
-  if (GetLeft()->IsIntConstant() && GetRight()->IsIntConstant()) {
-    return Evaluate(GetLeft()->AsIntConstant(), GetRight()->AsIntConstant());
-  } else if (GetLeft()->IsLongConstant()) {
-    if (GetRight()->IsIntConstant()) {
+  return TryStaticEvaluation(GetLeft(), GetRight());
+}
+
+HConstant* HBinaryOperation::TryStaticEvaluation(HInstruction* left, HInstruction* right) const {
+  if (left->IsIntConstant() && right->IsIntConstant()) {
+    return Evaluate(left->AsIntConstant(), right->AsIntConstant());
+  } else if (left->IsLongConstant()) {
+    if (right->IsIntConstant()) {
       // The binop(long, int) case is only valid for shifts and rotations.
       DCHECK(IsShl() || IsShr() || IsUShr() || IsRor()) << DebugName();
-      return Evaluate(GetLeft()->AsLongConstant(), GetRight()->AsIntConstant());
-    } else if (GetRight()->IsLongConstant()) {
-      return Evaluate(GetLeft()->AsLongConstant(), GetRight()->AsLongConstant());
+      return Evaluate(left->AsLongConstant(), right->AsIntConstant());
+    } else if (right->IsLongConstant()) {
+      return Evaluate(left->AsLongConstant(), right->AsLongConstant());
     }
-  } else if (GetLeft()->IsNullConstant() && GetRight()->IsNullConstant()) {
+  } else if (left->IsNullConstant() && right->IsNullConstant()) {
     // The binop(null, null) case is only valid for equal and not-equal conditions.
     DCHECK(IsEqual() || IsNotEqual()) << DebugName();
-    return Evaluate(GetLeft()->AsNullConstant(), GetRight()->AsNullConstant());
+    return Evaluate(left->AsNullConstant(), right->AsNullConstant());
   } else if (kEnableFloatingPointStaticEvaluation) {
-    if (GetLeft()->IsFloatConstant() && GetRight()->IsFloatConstant()) {
-      return Evaluate(GetLeft()->AsFloatConstant(), GetRight()->AsFloatConstant());
-    } else if (GetLeft()->IsDoubleConstant() && GetRight()->IsDoubleConstant()) {
-      return Evaluate(GetLeft()->AsDoubleConstant(), GetRight()->AsDoubleConstant());
+    if (left->IsFloatConstant() && right->IsFloatConstant()) {
+      return Evaluate(left->AsFloatConstant(), right->AsFloatConstant());
+    } else if (left->IsDoubleConstant() && right->IsDoubleConstant()) {
+      return Evaluate(left->AsDoubleConstant(), right->AsDoubleConstant());
     }
   }
   return nullptr;
@@ -2989,12 +3005,7 @@ HInstruction* HGraph::InlineInto(HGraph* outer_graph, HInvoke* invoke) {
       }
     }
     if (rerun_loop_analysis) {
-      DCHECK(!outer_graph->HasIrreducibleLoops())
-          << "Recomputing loop information in graphs with irreducible loops "
-          << "is unsupported, as it could lead to loop header changes";
-      outer_graph->ClearLoopInformation();
-      outer_graph->ClearDominanceInformation();
-      outer_graph->BuildDominatorTree();
+      outer_graph->RecomputeDominatorTree();
     } else if (rerun_dominance) {
       outer_graph->ClearDominanceInformation();
       outer_graph->ComputeDominanceInformation();

@@ -261,10 +261,11 @@ class BitTableBuilderBase {
   class Entry {
    public:
     Entry() {
-      // The definition of kNoValue here is for host and target debug builds which complain about
-      // missing a symbol definition for BitTableBase<N>::kNovValue when optimization is off.
-      static constexpr uint32_t kNoValue = BitTableBase<kNumColumns>::kNoValue;
-      std::fill_n(data_, kNumColumns, kNoValue);
+      // The definition of kLocalNoValue here is for host and target debug builds which
+      // complain about missing a symbol definition for BitTableBase<N>::kNovValue when
+      // optimization is off.
+      static constexpr uint32_t kLocalNoValue = BitTableBase<kNumColumns>::kNoValue;
+      std::fill_n(data_, kNumColumns, kLocalNoValue);
     }
 
     Entry(std::initializer_list<uint32_t> values) {

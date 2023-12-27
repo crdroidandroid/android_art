@@ -507,8 +507,10 @@ perfetto::protos::pbzero::HeapGraphType::Kind ProtoClassKind(uint32_t class_flag
   using perfetto::protos::pbzero::HeapGraphType;
   switch (class_flags) {
     case art::mirror::kClassFlagNormal:
+    case art::mirror::kClassFlagRecord:
       return HeapGraphType::KIND_NORMAL;
     case art::mirror::kClassFlagNoReferenceFields:
+    case art::mirror::kClassFlagNoReferenceFields | art::mirror::kClassFlagRecord:
       return HeapGraphType::KIND_NOREFERENCES;
     case art::mirror::kClassFlagString | art::mirror::kClassFlagNoReferenceFields:
       return HeapGraphType::KIND_STRING;
@@ -592,8 +594,12 @@ std::vector<std::pair<std::string, art::mirror::Object*>> GetReferences(art::mir
   std::vector<std::pair<std::string, art::mirror::Object*>> referred_objects;
   ReferredObjectsFinder objf(&referred_objects, emit_field_ids);
 
-  if (klass->GetClassFlags() != art::mirror::kClassFlagNormal &&
-      klass->GetClassFlags() != art::mirror::kClassFlagPhantomReference) {
+  uint32_t klass_flags = klass->GetClassFlags();
+  if (klass_flags != art::mirror::kClassFlagNormal &&
+      klass_flags != art::mirror::kClassFlagSoftReference &&
+      klass_flags != art::mirror::kClassFlagWeakReference &&
+      klass_flags != art::mirror::kClassFlagFinalizerReference &&
+      klass_flags != art::mirror::kClassFlagPhantomReference) {
     obj->VisitReferences(objf, art::VoidFunctor());
   } else {
     for (art::mirror::Class* cls = klass; cls != nullptr; cls = cls->GetSuperClass().Ptr()) {
@@ -801,9 +807,13 @@ class HeapGraphDumper {
                       art::mirror::Class* klass,
                       perfetto::protos::pbzero::HeapGraphObject* object_proto)
       REQUIRES_SHARED(art::Locks::mutator_lock_) {
-    const bool emit_field_ids = klass->GetClassFlags() != art::mirror::kClassFlagObjectArray &&
-                                klass->GetClassFlags() != art::mirror::kClassFlagNormal &&
-                                klass->GetClassFlags() != art::mirror::kClassFlagPhantomReference;
+    const uint32_t klass_flags = klass->GetClassFlags();
+    const bool emit_field_ids = klass_flags != art::mirror::kClassFlagObjectArray &&
+                                klass_flags != art::mirror::kClassFlagNormal &&
+                                klass_flags != art::mirror::kClassFlagSoftReference &&
+                                klass_flags != art::mirror::kClassFlagWeakReference &&
+                                klass_flags != art::mirror::kClassFlagFinalizerReference &&
+                                klass_flags != art::mirror::kClassFlagPhantomReference;
     std::vector<std::pair<std::string, art::mirror::Object*>> referred_objects =
         GetReferences(obj, klass, emit_field_ids);
 
@@ -1153,12 +1163,19 @@ void DumpPerfettoOutOfMemory() REQUIRES_SHARED(art::Locks::mutator_lock_) {
 
 // The plugin initialization function.
 extern "C" bool ArtPlugin_Initialize() {
-  if (art::Runtime::Current() == nullptr) {
+  art::Runtime* runtime = art::Runtime::Current();
+  if (runtime == nullptr) {
     return false;
   }
+
   art::Thread* self = art::Thread::Current();
+  if (self == nullptr) {
+    return false;
+  }
+
   {
-    art::MutexLock lk(self, GetStateMutex());
+    art::Mutex& state_mutex = GetStateMutex();
+    art::MutexLock lk(self, state_mutex);
     if (g_state != State::kUninitialized) {
       LOG(ERROR) << "perfetto_hprof already initialized. state: " << g_state;
       return false;
@@ -1189,35 +1206,38 @@ extern "C" bool ArtPlugin_Initialize() {
     return false;
   }
 
-  std::thread th([] {
-    art::Runtime* runtime = art::Runtime::Current();
-    if (!runtime) {
-      LOG(FATAL_WITHOUT_ABORT) << "no runtime in perfetto_hprof_listener";
+  std::thread th([runtime] {
+    if (runtime == nullptr) {
+      LOG(FATAL_WITHOUT_ABORT) << "Runtime is null in thread";
       return;
     }
-    if (!runtime->AttachCurrentThread("perfetto_hprof_listener", /*as_daemon=*/ true,
-                                      runtime->GetSystemThreadGroup(), /*create_peer=*/ false)) {
-      LOG(ERROR) << "failed to attach thread.";
+
+    if (!runtime->AttachCurrentThread("perfetto_hprof_listener", true, runtime->GetSystemThreadGroup(), false)) {
+      LOG(ERROR) << "Failed to attach thread.";
       {
-        art::MutexLock lk(nullptr, GetStateMutex());
+        art::Mutex& state_mutex = GetStateMutex();
+        art::MutexLock lk(nullptr, state_mutex);
         g_state = State::kUninitialized;
         GetStateCV().Broadcast(nullptr);
       }
+      return;
+    }
 
-      return;
-    }
     art::Thread* self = art::Thread::Current();
-    if (!self) {
-      LOG(FATAL_WITHOUT_ABORT) << "no thread in perfetto_hprof_listener";
+    if (self == nullptr) {
+      LOG(FATAL_WITHOUT_ABORT) << "Thread is null in perfetto_hprof_listener";
       return;
     }
+
     {
-      art::MutexLock lk(self, GetStateMutex());
+      art::Mutex& state_mutex = GetStateMutex();
+      art::MutexLock lk(self, state_mutex);
       if (g_state == State::kWaitForListener) {
         g_state = State::kWaitForStart;
         GetStateCV().Broadcast(self);
       }
     }
+
     char buf[1];
     for (;;) {
       int res;
@@ -1227,7 +1247,7 @@ extern "C" bool ArtPlugin_Initialize() {
 
       if (res <= 0) {
         if (res == -1) {
-          PLOG(ERROR) << "failed to read";
+          PLOG(ERROR) << "Failed to read";
         }
         close(g_signal_pipe_fds[0]);
         return;

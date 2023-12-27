@@ -17,6 +17,7 @@
 #ifndef ART_RUNTIME_JIT_JIT_CODE_CACHE_H_
 #define ART_RUNTIME_JIT_JIT_CODE_CACHE_H_
 
+#include <cstdint>
 #include <iosfwd>
 #include <memory>
 #include <set>
@@ -328,9 +329,11 @@ class JitCodeCache {
   void* MoreCore(const void* mspace, intptr_t increment);
 
   // Adds to `methods` all profiled methods which are part of any of the given dex locations.
+  // Saves inline caches for a method if its hotness meets `inline_cache_threshold` after being
+  // baseline compiled.
   void GetProfiledMethods(const std::set<std::string>& dex_base_locations,
-                          std::vector<ProfileMethodInfo>& methods)
-      REQUIRES(!Locks::jit_lock_)
+                          std::vector<ProfileMethodInfo>& methods,
+                          uint16_t inline_cache_threshold) REQUIRES(!Locks::jit_lock_)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
   void InvalidateAllCompiledCode()
@@ -404,6 +407,11 @@ class JitCodeCache {
 
   ProfilingInfo* GetProfilingInfo(ArtMethod* method, Thread* self);
   void ResetHotnessCounter(ArtMethod* method, Thread* self);
+  void MaybeUpdateInlineCache(ArtMethod* method,
+                              uint32_t dex_pc,
+                              ObjPtr<mirror::Class> cls,
+                              Thread* self)
+      REQUIRES_SHARED(Locks::mutator_lock_);
 
   void VisitRoots(RootVisitor* visitor);
 
@@ -478,12 +486,7 @@ class JitCodeCache {
   // Return whether the code cache's capacity is at its maximum.
   bool IsAtMaxCapacity() const REQUIRES(Locks::jit_lock_);
 
-  // Return whether we should do a full collection given the current state of the cache.
-  bool ShouldDoFullCollection()
-      REQUIRES(Locks::jit_lock_)
-      REQUIRES_SHARED(Locks::mutator_lock_);
-
-  void DoCollection(Thread* self, bool collect_profiling_info)
+  void DoCollection(Thread* self)
       REQUIRES(!Locks::jit_lock_)
       REQUIRES_SHARED(Locks::mutator_lock_);
 
@@ -576,9 +579,6 @@ class JitCodeCache {
   // Bitmap for collecting code and data.
   std::unique_ptr<CodeCacheBitmap> live_bitmap_;
 
-  // Whether the last collection round increased the code cache.
-  bool last_collection_increased_code_cache_ GUARDED_BY(Locks::jit_lock_);
-
   // Whether we can do garbage collection. Not 'const' as tests may override this.
   bool garbage_collect_code_ GUARDED_BY(Locks::jit_lock_);
 
@@ -605,7 +605,6 @@ class JitCodeCache {
   // Histograms for keeping track of profiling info statistics.
   Histogram<uint64_t> histogram_profiling_info_memory_use_ GUARDED_BY(Locks::jit_lock_);
 
-  friend class art::JitJniStubTestHelper;
   friend class ScopedCodeCacheWrite;
   friend class MarkCodeClosure;
 

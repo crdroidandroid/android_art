@@ -421,7 +421,10 @@ Heap::Heap(size_t initial_size,
   }
 
   LOG(INFO) << "Using " << foreground_collector_type_ << " GC.";
-  if (!gUseUserfaultfd) {
+  if (gUseUserfaultfd) {
+    CHECK_EQ(foreground_collector_type_, kCollectorTypeCMC);
+    CHECK_EQ(background_collector_type_, kCollectorTypeCMCBackground);
+  } else {
     // This ensures that userfaultfd syscall is done before any seccomp filter is installed.
     // TODO(b/266731037): Remove this when we no longer need to collect metric on userfaultfd
     // support.
@@ -1562,7 +1565,7 @@ void Heap::DoPendingCollectorTransition() {
       VLOG(gc) << "Homogeneous compaction ignored due to jank perceptible process state";
     }
   } else if (desired_collector_type == kCollectorTypeCCBackground ||
-             desired_collector_type == kCollectorTypeCMC) {
+             desired_collector_type == kCollectorTypeCMCBackground) {
     if (!CareAboutPauseTimes()) {
       // Invoke full compaction.
       CollectGarbageInternal(collector::kGcTypeFull,
@@ -1600,7 +1603,7 @@ class TrimIndirectReferenceTableClosure : public Closure {
  public:
   explicit TrimIndirectReferenceTableClosure(Barrier* barrier) : barrier_(barrier) {
   }
-  void Run(Thread* thread) override NO_THREAD_SAFETY_ANALYSIS {
+  void Run(Thread* thread) override REQUIRES_SHARED(Locks::mutator_lock_) {
     thread->GetJniEnv()->TrimLocals();
     // If thread is a running mutator, then act on behalf of the trim thread.
     // See the code in ThreadList::RunCheckpoint.
@@ -1621,8 +1624,8 @@ void Heap::TrimIndirectReferenceTables(Thread* self) {
   // TODO: May also want to look for entirely empty pages maintained by SmallIrtAllocator.
   Barrier barrier(0);
   TrimIndirectReferenceTableClosure closure(&barrier);
-  ScopedThreadStateChange tsc(self, ThreadState::kWaitingForCheckPointsToRun);
   size_t barrier_count = Runtime::Current()->GetThreadList()->RunCheckpoint(&closure);
+  ScopedThreadStateChange tsc(self, ThreadState::kWaitingForCheckPointsToRun);
   if (barrier_count != 0) {
     barrier.Increment(self, barrier_count);
   }
@@ -3975,7 +3978,12 @@ void Heap::RequestCollectorTransition(CollectorType desired_collector_type, uint
     // doesn't change.
     DCHECK_EQ(desired_collector_type_, kCollectorTypeCCBackground);
   }
+  if (collector_type_ == kCollectorTypeCMC) {
+    // For CMC collector type doesn't change.
+    DCHECK_EQ(desired_collector_type_, kCollectorTypeCMCBackground);
+  }
   DCHECK_NE(collector_type_, kCollectorTypeCCBackground);
+  DCHECK_NE(collector_type_, kCollectorTypeCMCBackground);
   CollectorTransitionTask* added_task = nullptr;
   const uint64_t target_time = NanoTime() + delta_time;
   {
@@ -4246,16 +4254,16 @@ void Heap::RemoveRememberedSet(space::Space* space) {
   CHECK(remembered_sets_.find(space) == remembered_sets_.end());
 }
 
-void Heap::ClearMarkedObjects() {
+void Heap::ClearMarkedObjects(bool release_eagerly) {
   // Clear all of the spaces' mark bitmaps.
   for (const auto& space : GetContinuousSpaces()) {
     if (space->GetLiveBitmap() != nullptr && !space->HasBoundBitmaps()) {
-      space->GetMarkBitmap()->Clear();
+      space->GetMarkBitmap()->Clear(release_eagerly);
     }
   }
   // Clear the marked objects in the discontinous space object sets.
   for (const auto& space : GetDiscontinuousSpaces()) {
-    space->GetMarkBitmap()->Clear();
+    space->GetMarkBitmap()->Clear(release_eagerly);
   }
 }
 

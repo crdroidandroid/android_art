@@ -87,24 +87,11 @@ GarbageCollector::GarbageCollector(Heap* heap, const std::string& name)
       pause_histogram_lock_("pause histogram lock", kDefaultMutexLevel, true),
       is_transaction_active_(false),
       are_metrics_initialized_(false) {
-  ResetCumulativeStatistics();
+  ResetMeasurements();
 }
 
 void GarbageCollector::RegisterPause(uint64_t nano_length) {
   GetCurrentIteration()->pause_times_.push_back(nano_length);
-}
-
-void GarbageCollector::ResetCumulativeStatistics() {
-  cumulative_timings_.Reset();
-  total_thread_cpu_time_ns_ = 0u;
-  total_time_ns_ = 0u;
-  total_freed_objects_ = 0u;
-  total_freed_bytes_ = 0;
-  total_scanned_bytes_ = 0;
-  rss_histogram_.Reset();
-  freed_bytes_histogram_.Reset();
-  MutexLock mu(Thread::Current(), pause_histogram_lock_);
-  pause_histogram_.Reset();
 }
 
 uint64_t GarbageCollector::ExtractRssFromMincore(
@@ -313,6 +300,22 @@ Iteration* GarbageCollector::GetCurrentIteration() {
 }
 const Iteration* GarbageCollector::GetCurrentIteration() const {
   return heap_->GetCurrentGcIteration();
+}
+
+bool GarbageCollector::ShouldEagerlyReleaseMemoryToOS() const {
+  Runtime* runtime = Runtime::Current();
+  // Zygote isn't a memory heavy process, we should always instantly release memory to the OS.
+  if (runtime->IsZygote()) {
+    return true;
+  }
+  if (GetCurrentIteration()->GetGcCause() == kGcCauseExplicit) {
+    // Our behavior with explicit GCs is to always release any available memory.
+    return true;
+  }
+  // Keep on the memory if the app is in foreground. If it is in background or
+  // goes into the background (see invocation with cause kGcCauseCollectorTransition),
+  // release the memory.
+  return !runtime->InJankPerceptibleProcessState();
 }
 
 void GarbageCollector::RecordFree(const ObjectBytePair& freed) {

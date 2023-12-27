@@ -302,6 +302,7 @@ constexpr int32_t EncodeGcCollectorType(gc::CollectorType collector_type) {
       return statsd::ART_DATUM_REPORTED__GC__ART_GC_COLLECTOR_TYPE_MARK_SWEEP;
     case gc::CollectorType::kCollectorTypeCMS:
       return statsd::ART_DATUM_REPORTED__GC__ART_GC_COLLECTOR_TYPE_CONCURRENT_MARK_SWEEP;
+    case gc::CollectorType::kCollectorTypeCMCBackground:
     case gc::CollectorType::kCollectorTypeCMC:
       return statsd::ART_DATUM_REPORTED__GC__ART_GC_COLLECTOR_TYPE_CONCURRENT_MARK_COMPACT;
     case gc::CollectorType::kCollectorTypeSS:

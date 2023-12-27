@@ -13,6 +13,7 @@
 #ifndef ART_RUNTIME_JIT_PROFILE_SAVER_OPTIONS_H_
 #define ART_RUNTIME_JIT_PROFILE_SAVER_OPTIONS_H_
 
+#include <cstdint>
 #include <ostream>
 #include <string>
 
@@ -33,6 +34,7 @@ struct ProfileSaverOptions {
   static constexpr uint32_t kMinNotificationBeforeWake = 10;
   static constexpr uint32_t kMaxNotificationBeforeWake = 50;
   static constexpr uint32_t kHotStartupMethodSamplesNotSet = std::numeric_limits<uint32_t>::max();
+  static constexpr uint16_t kInlineCacheThreshold = 4000;
 
   ProfileSaverOptions() :
     enabled_(false),
@@ -44,6 +46,7 @@ struct ProfileSaverOptions {
     min_classes_to_save_(kMinClassesToSave),
     min_notification_before_wake_(kMinNotificationBeforeWake),
     max_notification_before_wake_(kMaxNotificationBeforeWake),
+    inline_cache_threshold_(kInlineCacheThreshold),
     profile_path_(""),
     profile_boot_class_path_(false),
     profile_aot_code_(false),
@@ -59,6 +62,7 @@ struct ProfileSaverOptions {
       uint32_t min_classes_to_save,
       uint32_t min_notification_before_wake,
       uint32_t max_notification_before_wake,
+      uint16_t inline_cache_threshold,
       const std::string& profile_path,
       bool profile_boot_class_path,
       bool profile_aot_code = false,
@@ -72,6 +76,7 @@ struct ProfileSaverOptions {
     min_classes_to_save_(min_classes_to_save),
     min_notification_before_wake_(min_notification_before_wake),
     max_notification_before_wake_(max_notification_before_wake),
+    inline_cache_threshold_(inline_cache_threshold),
     profile_path_(profile_path),
     profile_boot_class_path_(profile_boot_class_path),
     profile_aot_code_(profile_aot_code),
@@ -112,6 +117,9 @@ struct ProfileSaverOptions {
   uint32_t GetMaxNotificationBeforeWake() const {
     return max_notification_before_wake_;
   }
+  uint16_t GetInlineCacheThreshold() const {
+    return inline_cache_threshold_;
+  }
   std::string GetProfilePath() const {
     return profile_path_;
   }
@@ -138,6 +146,7 @@ struct ProfileSaverOptions {
         << ", min_classes_to_save_" << pso.min_classes_to_save_
         << ", min_notification_before_wake_" << pso.min_notification_before_wake_
         << ", max_notification_before_wake_" << pso.max_notification_before_wake_
+        << ", inline_cache_threshold_" << pso.inline_cache_threshold_
         << ", profile_boot_class_path_" << pso.profile_boot_class_path_
         << ", profile_aot_code_" << pso.profile_aot_code_
         << ", wait_for_jit_notifications_to_save_" << pso.wait_for_jit_notifications_to_save_;
@@ -155,6 +164,7 @@ struct ProfileSaverOptions {
   uint32_t min_classes_to_save_;
   uint32_t min_notification_before_wake_;
   uint32_t max_notification_before_wake_;
+  uint16_t inline_cache_threshold_;
   std::string profile_path_;
   bool profile_boot_class_path_;
   bool profile_aot_code_;

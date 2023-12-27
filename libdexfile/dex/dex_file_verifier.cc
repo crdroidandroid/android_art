@@ -217,8 +217,11 @@ class DexFileVerifier {
   // Check a list. The head is assumed to be at *ptr, and elements to be of size element_size. If
   // successful, the ptr will be moved forward the amount covered by the list.
   bool CheckList(size_t element_size, const char* label, const uint8_t* *ptr);
-  // Checks whether the offset is zero (when size is zero) or that the offset falls within the area
-  // claimed by the file.
+  // Checks:
+  //   * the offset is zero (when size is zero),
+  //   * the offset falls within the area claimed by the file,
+  //   * the offset + size also falls within the area claimed by the file, and
+  //   * the alignment of the section
   bool CheckValidOffsetAndSize(uint32_t offset, uint32_t size, size_t alignment, const char* label);
   // Checks whether the size is less than the limit.
   ALWAYS_INLINE bool CheckSizeLimit(uint32_t size, uint32_t limit, const char* label) {
@@ -316,6 +319,7 @@ class DexFileVerifier {
   uint32_t FindFirstClassDataDefiner(const ClassAccessor& accessor);
   uint32_t FindFirstAnnotationsDirectoryDefiner(const uint8_t* ptr);
 
+  bool CheckInterHiddenapiClassData();
   bool CheckInterStringIdItem();
   bool CheckInterTypeIdItem();
   bool CheckInterProtoIdItem();
@@ -557,6 +561,13 @@ bool DexFileVerifier::CheckValidOffsetAndSize(uint32_t offset,
     ErrorStringPrintf("Offset(%d) should be within file size(%zu) for %s.", offset, size_, label);
     return false;
   }
+  // Check that offset + size is within the file size. Note that we use `<` to allow the section to
+  // end at the same point as the file. Check written as a subtraction to be safe from overfow.
+  if (size_ - offset < size) {
+    ErrorStringPrintf(
+        "Section end(%d) should be within file size(%zu) for %s.", offset + size, size_, label);
+    return false;
+  }
   if (alignment != 0 && !IsAlignedParam(offset, alignment)) {
     ErrorStringPrintf("Offset(%d) should be aligned by %zu for %s.", offset, alignment, label);
     return false;
@@ -608,7 +619,7 @@ bool DexFileVerifier::CheckHeader() {
                               /* alignment= */ 0,
                               "link") &&
       CheckValidOffsetAndSize(header_->map_off_,
-                              header_->map_off_,
+                              sizeof(dex::MapList),
                               /* alignment= */ 4,
                               "map") &&
       CheckValidOffsetAndSize(header_->string_ids_off_,
@@ -1523,7 +1534,9 @@ bool DexFileVerifier::CheckIntraClassDataItem() {
 
 bool DexFileVerifier::CheckIntraCodeItem() {
   const dex::CodeItem* code_item = reinterpret_cast<const dex::CodeItem*>(ptr_);
-  if (!CheckListSize(code_item, 1, sizeof(dex::CodeItem), "code")) {
+
+  DCHECK(dex_file_->IsStandardDexFile());
+  if (!CheckListSize(code_item, 1, sizeof(StandardDexFile::CodeItem), "code")) {
     return false;
   }
 
@@ -1737,6 +1750,10 @@ bool DexFileVerifier::CheckIntraDebugInfoItem() {
   }
 
   while (true) {
+    if (UNLIKELY(ptr_ >= begin_ + size_)) {
+      // Went past the end.
+      return false;
+    }
     uint8_t opcode = *(ptr_++);
     switch (opcode) {
       case DexFile::DBG_END_SEQUENCE: {
@@ -1870,80 +1887,10 @@ bool DexFileVerifier::CheckIntraHiddenapiClassData() {
     return false;
   }
 
+  // The rest of the section depends on the class_data_item being verified first. We will finalize
+  // verifying the hiddenapi_class_data_item in CheckInterHiddenapiClassData.
   const uint8_t* data_end = ptr_ + item->size_;
-  ptr_ += header_size;
-
-  // Check offsets for each class def.
-  for (uint32_t i = 0; i < dex_file_->NumClassDefs(); ++i) {
-    const dex::ClassDef& class_def = dex_file_->GetClassDef(i);
-    const uint8_t* class_data = dex_file_->GetClassData(class_def);
-    uint32_t offset = item->flags_offset_[i];
-
-    if (offset == 0) {
-      continue;
-    }
-
-    // Check that class defs with no class data do not have any hiddenapi class data.
-    if (class_data == nullptr) {
-      ErrorStringPrintf(
-          "Hiddenapi class data offset not zero for class def %u with no class data", i);
-      return false;
-    }
-
-    // Check that the offset is within the section.
-    if (offset > item->size_) {
-      ErrorStringPrintf(
-          "Hiddenapi class data offset out of section bounds (%u > %u) for class def %u",
-          offset, item->size_, i);
-      return false;
-    }
-
-    // Check that the offset matches current pointer position. We do not allow
-    // offsets into already parsed data, or gaps between class def data.
-    uint32_t ptr_offset = ptr_ - reinterpret_cast<const uint8_t*>(item);
-    if (offset != ptr_offset) {
-      ErrorStringPrintf(
-          "Hiddenapi class data unexpected offset (%u != %u) for class def %u",
-          offset, ptr_offset, i);
-      return false;
-    }
-
-    // Parse a uleb128 value for each field and method of this class.
-    bool failure = false;
-    auto fn_member = [&](const ClassAccessor::BaseItem& member, const char* member_type) {
-      if (failure) {
-        return;
-      }
-      uint32_t decoded_flags;
-      if (!DecodeUnsignedLeb128Checked(&ptr_, data_end, &decoded_flags)) {
-        ErrorStringPrintf("Hiddenapi class data value out of bounds (%p > %p) for %s %i",
-                          ptr_, data_end, member_type, member.GetIndex());
-        failure = true;
-        return;
-      }
-      if (!hiddenapi::ApiList(decoded_flags).IsValid()) {
-        ErrorStringPrintf("Hiddenapi class data flags invalid (%u) for %s %i",
-                          decoded_flags, member_type, member.GetIndex());
-        failure = true;
-        return;
-      }
-    };
-    auto fn_field = [&](const ClassAccessor::Field& field) { fn_member(field, "field"); };
-    auto fn_method = [&](const ClassAccessor::Method& method) { fn_member(method, "method"); };
-    ClassAccessor accessor(*dex_file_, class_data);
-    accessor.VisitFieldsAndMethods(fn_field, fn_field, fn_method, fn_method);
-    if (failure) {
-      return false;
-    }
-  }
-
-  if (ptr_ != data_end) {
-    ErrorStringPrintf("Hiddenapi class data wrong reported size (%u != %u)",
-                       static_cast<uint32_t>(ptr_ - reinterpret_cast<const uint8_t*>(item)),
-                       item->size_);
-    return false;
-  }
-
+  ptr_ = data_end;
   return true;
 }
 
@@ -2317,10 +2264,6 @@ bool DexFileVerifier::CheckIntraSection() {
       return false;
     }
 
-    if (type == DexFile::kDexTypeClassDataItem) {
-      FindStringRangesForMethodNames();
-    }
-
     // Check each item based on its type.
     switch (type) {
       case DexFile::kDexTypeHeaderItem:
@@ -2468,6 +2411,90 @@ uint32_t DexFileVerifier::FindFirstAnnotationsDirectoryDefiner(const uint8_t* pt
   }
 
   return kDexNoIndex;
+}
+
+bool DexFileVerifier::CheckInterHiddenapiClassData() {
+  const dex::HiddenapiClassData* item = reinterpret_cast<const dex::HiddenapiClassData*>(ptr_);
+
+  // Move pointer after the header. This data has been verified in CheckIntraHiddenapiClassData.
+  uint32_t num_header_elems = dex_file_->NumClassDefs() + 1;
+  uint32_t elem_size = sizeof(uint32_t);
+  uint32_t header_size = num_header_elems * elem_size;
+  const uint8_t* data_end = ptr_ + item->size_;
+  ptr_ += header_size;
+
+  // Check offsets for each class def.
+  for (uint32_t i = 0; i < dex_file_->NumClassDefs(); ++i) {
+    const dex::ClassDef& class_def = dex_file_->GetClassDef(i);
+    const uint8_t* class_data = dex_file_->GetClassData(class_def);
+    uint32_t offset = item->flags_offset_[i];
+
+    if (offset == 0) {
+      continue;
+    }
+
+    // Check that class defs with no class data do not have any hiddenapi class data.
+    if (class_data == nullptr) {
+      ErrorStringPrintf(
+          "Hiddenapi class data offset not zero for class def %u with no class data", i);
+      return false;
+    }
+
+    // Check that the offset is within the section.
+    if (offset > item->size_) {
+      ErrorStringPrintf(
+          "Hiddenapi class data offset out of section bounds (%u > %u) for class def %u",
+          offset, item->size_, i);
+      return false;
+    }
+
+    // Check that the offset matches current pointer position. We do not allow
+    // offsets into already parsed data, or gaps between class def data.
+    uint32_t ptr_offset = ptr_ - reinterpret_cast<const uint8_t*>(item);
+    if (offset != ptr_offset) {
+      ErrorStringPrintf(
+          "Hiddenapi class data unexpected offset (%u != %u) for class def %u",
+          offset, ptr_offset, i);
+      return false;
+    }
+
+    // Parse a uleb128 value for each field and method of this class.
+    bool failure = false;
+    auto fn_member = [&](const ClassAccessor::BaseItem& member, const char* member_type) {
+      if (failure) {
+        return;
+      }
+      uint32_t decoded_flags;
+      if (!DecodeUnsignedLeb128Checked(&ptr_, data_end, &decoded_flags)) {
+        ErrorStringPrintf("Hiddenapi class data value out of bounds (%p > %p) for %s %i",
+                          ptr_, data_end, member_type, member.GetIndex());
+        failure = true;
+        return;
+      }
+      if (!hiddenapi::ApiList(decoded_flags).IsValid()) {
+        ErrorStringPrintf("Hiddenapi class data flags invalid (%u) for %s %i",
+                          decoded_flags, member_type, member.GetIndex());
+        failure = true;
+        return;
+      }
+    };
+    auto fn_field = [&](const ClassAccessor::Field& field) { fn_member(field, "field"); };
+    auto fn_method = [&](const ClassAccessor::Method& method) { fn_member(method, "method"); };
+    ClassAccessor accessor(*dex_file_, class_data);
+    accessor.VisitFieldsAndMethods(fn_field, fn_field, fn_method, fn_method);
+    if (failure) {
+      return false;
+    }
+  }
+
+  if (ptr_ != data_end) {
+    ErrorStringPrintf("Hiddenapi class data wrong reported size (%u != %u)",
+                       static_cast<uint32_t>(ptr_ - reinterpret_cast<const uint8_t*>(item)),
+                       item->size_);
+    return false;
+  }
+
+  return true;
 }
 
 bool DexFileVerifier::CheckInterStringIdItem() {
@@ -3136,8 +3163,13 @@ bool DexFileVerifier::CheckInterSectionIterate(size_t offset,
       case DexFile::kDexTypeDebugInfoItem:
       case DexFile::kDexTypeAnnotationItem:
       case DexFile::kDexTypeEncodedArrayItem:
-      case DexFile::kDexTypeHiddenapiClassData:
         break;
+      case DexFile::kDexTypeHiddenapiClassData: {
+        if (!CheckIntraHiddenapiClassData()) {
+          return false;
+        }
+        break;
+      }
       case DexFile::kDexTypeStringIdItem: {
         if (!CheckInterStringIdItem()) {
           return false;
@@ -3248,6 +3280,10 @@ bool DexFileVerifier::CheckInterSection() {
     uint32_t section_count = item->size_;
     DexFile::MapItemType type = static_cast<DexFile::MapItemType>(item->type_);
     bool found = false;
+
+    if (type == DexFile::kDexTypeClassDataItem) {
+      FindStringRangesForMethodNames();
+    }
 
     switch (type) {
       case DexFile::kDexTypeHeaderItem:

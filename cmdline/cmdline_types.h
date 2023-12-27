@@ -18,6 +18,7 @@
 
 #define CMDLINE_NDEBUG 1  // Do not output any debugging information for parsing.
 
+#include <cstdint>
 #include <list>
 #include <ostream>
 
@@ -256,6 +257,17 @@ struct CmdlineType<unsigned int> : CmdlineTypeParser<unsigned int> {
   static const char* Name() { return "unsigned integer"; }
   static const char* DescribeType() { return "unsigned integer value"; }
 };
+
+template <>
+struct CmdlineType<uint16_t> : CmdlineTypeParser<uint16_t> {
+  Result Parse(const std::string& str) {
+    return ParseNumeric<uint16_t>(str);
+  }
+
+  static const char* Name() { return "unsigned 16-bit integer"; }
+  static const char* DescribeType() { return "unsigned 16-bit integer value"; }
+};
+
 
 template <>
 struct CmdlineType<int> : CmdlineTypeParser<int> {
@@ -848,6 +860,11 @@ struct CmdlineType<ProfileSaverOptions> : CmdlineTypeParser<ProfileSaverOptions>
       return ParseInto(existing,
              &ProfileSaverOptions::max_notification_before_wake_,
              type_parser.Parse(suffix));
+    }
+    if (android::base::StartsWith(option, "inline-cache-threshold:")) {
+      CmdlineType<uint16_t> type_parser;
+      return ParseInto(
+          existing, &ProfileSaverOptions::inline_cache_threshold_, type_parser.Parse(suffix));
     }
     if (android::base::StartsWith(option, "profile-path:")) {
       existing.profile_path_ = suffix;
