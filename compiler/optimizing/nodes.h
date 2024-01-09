@@ -4700,6 +4700,17 @@ static inline bool IsPcRelativeMethodLoadKind(MethodLoadKind load_kind) {
          load_kind == MethodLoadKind::kBssEntry;
 }
 
+static bool IsUnreachableIntrinsic(Intrinsics intrinsic) {
+  switch (intrinsic) {
+#define UNREACHABLE_CASE(Name) case Intrinsics::k##Name:
+    UNREACHABLE_INTRINSICS_LIST(UNREACHABLE_CASE)
+#undef UNREACHABLE_CASE
+    return true;
+    default:
+      return false;
+  }
+}
+
 class HInvoke : public HVariableInputSizeInstruction {
  public:
   bool NeedsEnvironment() const override;
@@ -4754,6 +4765,7 @@ class HInvoke : public HVariableInputSizeInstruction {
   }
 
   bool IsIntrinsic() const { return intrinsic_ != Intrinsics::kNone; }
+  bool IsUnreachableIntrinsic() const { return ::art::IsUnreachableIntrinsic(GetIntrinsic()); }
 
   ArtMethod* GetResolvedMethod() const { return resolved_method_; }
   void SetResolvedMethod(ArtMethod* method, bool enable_intrinsic_opt);

@@ -288,5 +288,51 @@
   V(CRC32UpdateByteBuffer, kStatic, kNeedsEnvironment, kReadSideEffects, kNoThrow, "Ljava/util/zip/CRC32;", "updateByteBuffer", "(IJII)I") \
   SIGNATURE_POLYMORPHIC_INTRINSICS_LIST(V)
 
+// Intrinsics which should have been replaced in the instruction builder.
+#define UNREACHABLE_INTRINSICS_LIST(V) \
+  V(IntegerRotateRight)                \
+  V(LongRotateRight)                   \
+  V(IntegerRotateLeft)                 \
+  V(LongRotateLeft)                    \
+  V(IntegerCompare)                    \
+  V(LongCompare)                       \
+  V(IntegerSignum)                     \
+  V(LongSignum)                        \
+  V(FloatIsNaN)                        \
+  V(DoubleIsNaN)                       \
+  V(StringIsEmpty)                     \
+  V(UnsafeLoadFence)                   \
+  V(UnsafeStoreFence)                  \
+  V(UnsafeFullFence)                   \
+  V(JdkUnsafeLoadFence)                \
+  V(JdkUnsafeStoreFence)               \
+  V(JdkUnsafeFullFence)                \
+  V(VarHandleFullFence)                \
+  V(VarHandleAcquireFence)             \
+  V(VarHandleReleaseFence)             \
+  V(VarHandleLoadLoadFence)            \
+  V(VarHandleStoreStoreFence)          \
+  V(MathMinIntInt)                     \
+  V(MathMinLongLong)                   \
+  V(MathMinFloatFloat)                 \
+  V(MathMinDoubleDouble)               \
+  V(MathMaxIntInt)                     \
+  V(MathMaxLongLong)                   \
+  V(MathMaxFloatFloat)                 \
+  V(MathMaxDoubleDouble)               \
+  V(MathAbsInt)                        \
+  V(MathAbsLong)                       \
+  V(MathAbsFloat)                      \
+  V(MathAbsDouble)
+
+// Intrinsics which should have been replaced before codegen. These are a superset of
+// UNREACHABLE_INTRINSICS_LIST.
+#define UNREACHABLE_INTRINSICS_LIST_DURING_CODEGEN(V) \
+  UNREACHABLE_INTRINSICS_LIST(V)                      \
+  V(FloatFloatToIntBits)                              \
+  V(DoubleDoubleToLongBits)                           \
+  V(StringCharAt)                                     \
+  V(StringLength)
+
 #endif  // ART_RUNTIME_INTRINSICS_LIST_H_
 #undef ART_RUNTIME_INTRINSICS_LIST_H_   // #define is only for lint.

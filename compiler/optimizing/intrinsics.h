@@ -276,45 +276,6 @@ void IntrinsicCodeGenerator ## Arch::Visit ## Name(HInvoke* invoke) {    \
   LOG(FATAL) << "Unreachable: intrinsic " << invoke->GetIntrinsic()      \
              << " should have been converted to HIR";                    \
 }
-#define UNREACHABLE_INTRINSICS(Arch)                            \
-UNREACHABLE_INTRINSIC(Arch, MathMinIntInt)                      \
-UNREACHABLE_INTRINSIC(Arch, MathMinLongLong)                    \
-UNREACHABLE_INTRINSIC(Arch, MathMinFloatFloat)                  \
-UNREACHABLE_INTRINSIC(Arch, MathMinDoubleDouble)                \
-UNREACHABLE_INTRINSIC(Arch, MathMaxIntInt)                      \
-UNREACHABLE_INTRINSIC(Arch, MathMaxLongLong)                    \
-UNREACHABLE_INTRINSIC(Arch, MathMaxFloatFloat)                  \
-UNREACHABLE_INTRINSIC(Arch, MathMaxDoubleDouble)                \
-UNREACHABLE_INTRINSIC(Arch, MathAbsInt)                         \
-UNREACHABLE_INTRINSIC(Arch, MathAbsLong)                        \
-UNREACHABLE_INTRINSIC(Arch, MathAbsFloat)                       \
-UNREACHABLE_INTRINSIC(Arch, MathAbsDouble)                      \
-UNREACHABLE_INTRINSIC(Arch, FloatFloatToIntBits)                \
-UNREACHABLE_INTRINSIC(Arch, DoubleDoubleToLongBits)             \
-UNREACHABLE_INTRINSIC(Arch, FloatIsNaN)                         \
-UNREACHABLE_INTRINSIC(Arch, DoubleIsNaN)                        \
-UNREACHABLE_INTRINSIC(Arch, IntegerRotateLeft)                  \
-UNREACHABLE_INTRINSIC(Arch, LongRotateLeft)                     \
-UNREACHABLE_INTRINSIC(Arch, IntegerRotateRight)                 \
-UNREACHABLE_INTRINSIC(Arch, LongRotateRight)                    \
-UNREACHABLE_INTRINSIC(Arch, IntegerCompare)                     \
-UNREACHABLE_INTRINSIC(Arch, LongCompare)                        \
-UNREACHABLE_INTRINSIC(Arch, IntegerSignum)                      \
-UNREACHABLE_INTRINSIC(Arch, LongSignum)                         \
-UNREACHABLE_INTRINSIC(Arch, StringCharAt)                       \
-UNREACHABLE_INTRINSIC(Arch, StringIsEmpty)                      \
-UNREACHABLE_INTRINSIC(Arch, StringLength)                       \
-UNREACHABLE_INTRINSIC(Arch, UnsafeLoadFence)                    \
-UNREACHABLE_INTRINSIC(Arch, UnsafeStoreFence)                   \
-UNREACHABLE_INTRINSIC(Arch, UnsafeFullFence)                    \
-UNREACHABLE_INTRINSIC(Arch, JdkUnsafeLoadFence)                 \
-UNREACHABLE_INTRINSIC(Arch, JdkUnsafeStoreFence)                \
-UNREACHABLE_INTRINSIC(Arch, JdkUnsafeFullFence)                 \
-UNREACHABLE_INTRINSIC(Arch, VarHandleFullFence)                 \
-UNREACHABLE_INTRINSIC(Arch, VarHandleAcquireFence)              \
-UNREACHABLE_INTRINSIC(Arch, VarHandleReleaseFence)              \
-UNREACHABLE_INTRINSIC(Arch, VarHandleLoadLoadFence)             \
-UNREACHABLE_INTRINSIC(Arch, VarHandleStoreStoreFence)
 
 template <typename IntrinsicLocationsBuilder, typename Codegenerator>
 bool IsCallFreeIntrinsic(HInvoke* invoke, Codegenerator* codegen) {
