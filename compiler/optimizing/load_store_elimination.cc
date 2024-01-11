@@ -2720,7 +2720,11 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
               local_heap_values[idx] = Replacement(local_heap_values[idx]);
             }
             record.value = local_heap_values[idx];
-            HInstruction* heap_value = local_heap_values[idx].GetInstruction();
+            DCHECK(local_heap_values[idx].IsDefault() || local_heap_values[idx].IsInstruction())
+                << "The replacement heap value can be an HIR instruction or the default value.";
+            HInstruction* heap_value = local_heap_values[idx].IsDefault() ?
+                                           GetDefaultValue(load_or_store->GetType()) :
+                                           local_heap_values[idx].GetInstruction();
             AddRemovedLoad(load_or_store, heap_value);
           }
         }
