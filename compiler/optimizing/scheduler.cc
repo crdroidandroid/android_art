@@ -799,10 +799,14 @@ bool HInstructionScheduling::Run(bool only_optimize_loop_blocks,
   // Phase-local allocator that allocates scheduler internal data structures like
   // scheduling nodes, internel nodes map, dependencies, etc.
   CriticalPathSchedulingNodeSelector critical_path_selector;
-  RandomSchedulingNodeSelector random_selector;
-  SchedulingNodeSelector* selector = schedule_randomly
-      ? static_cast<SchedulingNodeSelector*>(&random_selector)
-      : static_cast<SchedulingNodeSelector*>(&critical_path_selector);
+  // Do not create the `RandomSchedulingNodeSelector` if not requested.
+  // The construction is expensive, including a call to `srand()`.
+  std::optional<RandomSchedulingNodeSelector> random_selector;
+  SchedulingNodeSelector* selector = &critical_path_selector;
+  if (schedule_randomly) {
+    random_selector.emplace();
+    selector = &random_selector.value();
+  }
 #else
   // Avoid compilation error when compiling for unsupported instruction set.
   UNUSED(only_optimize_loop_blocks);
