@@ -1435,17 +1435,18 @@ class LSEVisitor final : private HGraphDelegateVisitor {
   // Loads that would require a loop Phi to replace are recorded for processing
   // later as we do not have enough information from back-edges to determine if
   // a suitable Phi can be found or created when we visit these loads.
-  ScopedArenaHashMap<HInstruction*, ValueRecord> loads_requiring_loop_phi_;
+  // This is a flat "map" indexed by the load instruction id.
+  ScopedArenaVector<ValueRecord*> loads_requiring_loop_phi_;
 
   // For stores, record the old value records that were replaced and the stored values.
   struct StoreRecord {
+    StoreRecord(ValueRecord old_value_record_in, HInstruction* stored_value_in)
+        : old_value_record(old_value_record_in), stored_value(stored_value_in) {}
     ValueRecord old_value_record;
     HInstruction* stored_value;
   };
-  // Small pre-allocated initial buffer avoids initializing a large one until it's really needed.
-  static constexpr size_t kStoreRecordsInitialBufferSize = 16;
-  std::pair<HInstruction*, StoreRecord> store_records_buffer_[kStoreRecordsInitialBufferSize];
-  ScopedArenaHashMap<HInstruction*, StoreRecord> store_records_;
+  // This is a flat "map" indexed by the store instruction id.
+  ScopedArenaVector<StoreRecord*> store_records_;
 
   // Replacements for Phi placeholders.
   // The invalid heap value is used to mark Phi placeholders that cannot be replaced.
@@ -1635,9 +1636,7 @@ LSEVisitor::LSEVisitor(HGraph* graph,
                                                   /*expandable=*/false,
                                                   kArenaAllocLSE),
       loads_requiring_loop_phi_(allocator_.Adapter(kArenaAllocLSE)),
-      store_records_(store_records_buffer_,
-                     kStoreRecordsInitialBufferSize,
-                     allocator_.Adapter(kArenaAllocLSE)),
+      store_records_(allocator_.Adapter(kArenaAllocLSE)),
       phi_placeholder_replacements_(num_phi_placeholders_,
                                     Value::Invalid(),
                                     allocator_.Adapter(kArenaAllocLSE)),
@@ -1942,7 +1941,12 @@ void LSEVisitor::VisitGetLocation(HInstruction* instruction, size_t idx) {
     KeepStores(old_value);
   } else if (record.value.NeedsLoopPhi()) {
     // We do not know yet if the value is known for all back edges. Record for future processing.
-    loads_requiring_loop_phi_.insert(std::make_pair(instruction, record));
+    if (loads_requiring_loop_phi_.empty()) {
+      loads_requiring_loop_phi_.resize(GetGraph()->GetCurrentInstructionId(), nullptr);
+    }
+    DCHECK_EQ(loads_requiring_loop_phi_[instruction->GetId()], nullptr);
+    loads_requiring_loop_phi_[instruction->GetId()] =
+        new (allocator_.Alloc<ValueRecord>(kArenaAllocLSE)) ValueRecord(record);
   } else {
     // This load can be eliminated but we may need to construct non-loop Phis.
     if (record.value.NeedsNonLoopPhi()) {
@@ -1975,7 +1979,12 @@ void LSEVisitor::VisitSetLocation(HInstruction* instruction, size_t idx, HInstru
     return;
   }
 
-  store_records_.insert(std::make_pair(instruction, StoreRecord{record, value}));
+  if (store_records_.empty()) {
+    store_records_.resize(GetGraph()->GetCurrentInstructionId(), nullptr);
+  }
+  DCHECK_EQ(store_records_[instruction->GetId()], nullptr);
+  store_records_[instruction->GetId()] =
+      new (allocator_.Alloc<StoreRecord>(kArenaAllocLSE)) StoreRecord(record, value);
   loads_and_stores_.push_back({ instruction, idx });
 
   // If the `record.stored_by` specified a store from this block, it shall be removed
@@ -1995,10 +2004,14 @@ void LSEVisitor::VisitSetLocation(HInstruction* instruction, size_t idx, HInstru
   }
 
   // Update the record.
-  auto it = loads_requiring_loop_phi_.find(value);
-  if (it != loads_requiring_loop_phi_.end()) {
+  // Note that the `value` can be a newly created `Phi` with an id that falls outside
+  // the allocated `loads_requiring_loop_phi_` range.
+  DCHECK_IMPLIES(IsLoad(value) && !loads_requiring_loop_phi_.empty(),
+                 static_cast<size_t>(value->GetId()) < loads_requiring_loop_phi_.size());
+  if (static_cast<size_t>(value->GetId()) < loads_requiring_loop_phi_.size() &&
+      loads_requiring_loop_phi_[value->GetId()] != nullptr) {
     // Propapate the Phi placeholder to the record.
-    record.value = it->second.value;
+    record.value = loads_requiring_loop_phi_[value->GetId()]->value;
     DCHECK(record.value.NeedsLoopPhi());
   } else {
     record.value = Value::ForInstruction(value);
@@ -2603,6 +2616,7 @@ std::optional<LSEVisitor::PhiPlaceholder> LSEVisitor::TryToMaterializeLoopPhis(
 // opportunities. If we find no such load, we shall at least propagate an unknown value to some
 // heap location that is needed by another loop Phi placeholder.
 void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unknown_input) {
+  DCHECK(!loads_requiring_loop_phi_.empty());
   size_t loop_phi_with_unknown_input_index = PhiPlaceholderIndex(loop_phi_with_unknown_input);
   DCHECK(phi_placeholder_replacements_[loop_phi_with_unknown_input_index].IsInvalid());
   phi_placeholder_replacements_[loop_phi_with_unknown_input_index] =
@@ -2668,28 +2682,29 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
       if (load_or_store->GetBlock() != block) {
         break;  // End of instructions from the current block.
       }
-      const bool is_store = IsStore(load_or_store);
-      HInstruction* stored_value = nullptr;
-      if (is_store) {
-        auto it = store_records_.find(load_or_store);
-        DCHECK(it != store_records_.end());
-        stored_value = it->second.stored_value;
-      }
-      auto it = loads_requiring_loop_phi_.find(
-          stored_value != nullptr ? stored_value : load_or_store);
-      if (it == loads_requiring_loop_phi_.end()) {
-        continue;  // This load or store never needed a loop Phi.
-      }
-      ValueRecord& record = it->second;
-      if (is_store) {
+      if (IsStore(load_or_store)) {
+        StoreRecord* store_record = store_records_[load_or_store->GetId()];
+        DCHECK(store_record != nullptr);
+        HInstruction* stored_value = store_record->stored_value;
+        DCHECK(stored_value != nullptr);
+        // Note that the `stored_value` can be a newly created `Phi` with an id that falls
+        // outside the allocated `loads_requiring_loop_phi_` range.
+        DCHECK_IMPLIES(
+            IsLoad(stored_value),
+            static_cast<size_t>(stored_value->GetId()) < loads_requiring_loop_phi_.size());
+        if (static_cast<size_t>(stored_value->GetId()) >= loads_requiring_loop_phi_.size() ||
+            loads_requiring_loop_phi_[stored_value->GetId()] == nullptr) {
+          continue;  // This store never needed a loop Phi.
+        }
+        ValueRecord* record = loads_requiring_loop_phi_[stored_value->GetId()];
         // Process the store by updating `local_heap_values[idx]`. The last update shall
         // be propagated to the `heap_values[idx].value` if it previously needed a loop Phi
         // at the end of the block.
-        Value replacement = ReplacementOrValue(record.value);
+        Value replacement = ReplacementOrValue(record->value);
         if (replacement.NeedsLoopPhi()) {
           // No replacement yet, use the Phi placeholder from the load.
-          DCHECK(record.value.NeedsLoopPhi());
-          local_heap_values[idx] = record.value;
+          DCHECK(record->value.NeedsLoopPhi());
+          local_heap_values[idx] = record->value;
         } else {
           // If the load fetched a known value, use it, otherwise use the load.
           local_heap_values[idx] = Value::ForInstruction(
@@ -2697,7 +2712,12 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
         }
       } else {
         // Process the load unless it has previously been marked unreplaceable.
-        if (record.value.NeedsLoopPhi()) {
+        DCHECK(IsLoad(load_or_store));
+        ValueRecord* record = loads_requiring_loop_phi_[load_or_store->GetId()];
+        if (record == nullptr) {
+          continue;  // This load never needed a loop Phi.
+        }
+        if (record->value.NeedsLoopPhi()) {
           if (local_heap_values[idx].IsInvalid()) {
             local_heap_values[idx] = get_initial_value(block, idx);
           }
@@ -2706,12 +2726,12 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
             // (no aliasing since then, otherwise the Phi placeholder would not have been
             // propagated as a value to this load) and store the load as the new heap value.
             found_unreplaceable_load = true;
-            KeepStores(record.value);
-            record.value = Value::MergedUnknown(record.value.GetPhiPlaceholder());
+            KeepStores(record->value);
+            record->value = Value::MergedUnknown(record->value.GetPhiPlaceholder());
             local_heap_values[idx] = Value::ForInstruction(load_or_store);
           } else if (local_heap_values[idx].NeedsLoopPhi()) {
             // The load may still be replaced with a Phi later.
-            DCHECK(local_heap_values[idx].Equals(record.value));
+            DCHECK(local_heap_values[idx].Equals(record->value));
           } else {
             // This load can be eliminated but we may need to construct non-loop Phis.
             if (local_heap_values[idx].NeedsNonLoopPhi()) {
@@ -2719,7 +2739,7 @@ void LSEVisitor::ProcessLoopPhiWithUnknownInput(PhiPlaceholder loop_phi_with_unk
                                      load_or_store->GetType());
               local_heap_values[idx] = Replacement(local_heap_values[idx]);
             }
-            record.value = local_heap_values[idx];
+            record->value = local_heap_values[idx];
             DCHECK(local_heap_values[idx].IsDefault() || local_heap_values[idx].IsInstruction())
                 << "The replacement heap value can be an HIR instruction or the default value.";
             HInstruction* heap_value = local_heap_values[idx].IsDefault() ?
@@ -2755,19 +2775,21 @@ void LSEVisitor::ProcessLoadsRequiringLoopPhis() {
   // make the result of the processing depend on the order in which we process these loads.
   // To make sure the result is deterministic, iterate over `loads_and_stores_` instead of the
   // `loads_requiring_loop_phi_` indexed by non-deterministic pointers.
+  if (loads_requiring_loop_phi_.empty()) {
+    return;  // No loads to process.
+  }
   for (const LoadStoreRecord& load_store_record : loads_and_stores_) {
-    auto it = loads_requiring_loop_phi_.find(load_store_record.load_or_store);
-    if (it == loads_requiring_loop_phi_.end()) {
+    ValueRecord* record = loads_requiring_loop_phi_[load_store_record.load_or_store->GetId()];
+    if (record == nullptr) {
       continue;
     }
-    HInstruction* load = it->first;
-    ValueRecord& record = it->second;
-    while (record.value.NeedsLoopPhi() &&
-           phi_placeholder_replacements_[PhiPlaceholderIndex(record.value)].IsInvalid()) {
+    HInstruction* load = load_store_record.load_or_store;
+    while (record->value.NeedsLoopPhi() &&
+           phi_placeholder_replacements_[PhiPlaceholderIndex(record->value)].IsInvalid()) {
       std::optional<PhiPlaceholder> loop_phi_with_unknown_input =
-          TryToMaterializeLoopPhis(record.value.GetPhiPlaceholder(), load);
+          TryToMaterializeLoopPhis(record->value.GetPhiPlaceholder(), load);
       DCHECK_EQ(loop_phi_with_unknown_input.has_value(),
-                phi_placeholder_replacements_[PhiPlaceholderIndex(record.value)].IsInvalid());
+                phi_placeholder_replacements_[PhiPlaceholderIndex(record->value)].IsInvalid());
       if (loop_phi_with_unknown_input) {
         DCHECK_GE(GetGraph()
                       ->GetBlocks()[loop_phi_with_unknown_input->GetBlockId()]
@@ -2779,10 +2801,12 @@ void LSEVisitor::ProcessLoadsRequiringLoopPhis() {
     }
     // The load could have been marked as unreplaceable (and stores marked for keeping)
     // or marked for replacement with an instruction in ProcessLoopPhiWithUnknownInput().
-    DCHECK(record.value.IsUnknown() || record.value.IsInstruction() || record.value.NeedsLoopPhi());
-    if (record.value.NeedsLoopPhi()) {
-      record.value = Replacement(record.value);
-      HInstruction* heap_value = record.value.GetInstruction();
+    DCHECK(record->value.IsUnknown() ||
+           record->value.IsInstruction() ||
+           record->value.NeedsLoopPhi());
+    if (record->value.NeedsLoopPhi()) {
+      record->value = Replacement(record->value);
+      HInstruction* heap_value = record->value.GetInstruction();
       AddRemovedLoad(load, heap_value);
     }
   }
@@ -2869,9 +2893,9 @@ void LSEVisitor::SearchPhiPlaceholdersForKeptStores() {
 void LSEVisitor::UpdateValueRecordForStoreElimination(/*inout*/ValueRecord* value_record) {
   while (value_record->stored_by.IsInstruction() &&
          !kept_stores_.IsBitSet(value_record->stored_by.GetInstruction()->GetId())) {
-    auto it = store_records_.find(value_record->stored_by.GetInstruction());
-    DCHECK(it != store_records_.end());
-    *value_record = it->second.old_value_record;
+    StoreRecord* store_record = store_records_[value_record->stored_by.GetInstruction()->GetId()];
+    DCHECK(store_record != nullptr);
+    *value_record = store_record->old_value_record;
   }
   if (value_record->stored_by.NeedsPhi() &&
       !phi_placeholders_to_search_for_kept_stores_.IsBitSet(
@@ -3010,22 +3034,21 @@ void LSEVisitor::FindStoresWritingOldValues() {
                                    kArenaAllocLSE);
   eliminated_stores.ClearAllBits();
 
-  for (auto& entry : store_records_) {
-    HInstruction* store = entry.first;
-    StoreRecord& store_record = entry.second;
-    if (!kept_stores_.IsBitSet(store->GetId())) {
-      continue;  // Ignore stores that are not kept.
+  for (uint32_t store_id : kept_stores_.Indexes()) {
+    DCHECK(kept_stores_.IsBitSet(store_id));
+    StoreRecord* store_record = store_records_[store_id];
+    DCHECK(store_record != nullptr);
+    UpdateValueRecordForStoreElimination(&store_record->old_value_record);
+    if (store_record->old_value_record.value.NeedsPhi()) {
+      DataType::Type type = store_record->stored_value->GetType();
+      FindOldValueForPhiPlaceholder(store_record->old_value_record.value.GetPhiPlaceholder(), type);
+      store_record->old_value_record.value =
+          ReplacementOrValue(store_record->old_value_record.value);
     }
-    UpdateValueRecordForStoreElimination(&store_record.old_value_record);
-    if (store_record.old_value_record.value.NeedsPhi()) {
-      DataType::Type type = store_record.stored_value->GetType();
-      FindOldValueForPhiPlaceholder(store_record.old_value_record.value.GetPhiPlaceholder(), type);
-      store_record.old_value_record.value = ReplacementOrValue(store_record.old_value_record.value);
-    }
-    DCHECK(!store_record.old_value_record.value.NeedsPhi());
-    HInstruction* stored_value = FindSubstitute(store_record.stored_value);
-    if (store_record.old_value_record.value.Equals(stored_value)) {
-      eliminated_stores.SetBit(store->GetId());
+    DCHECK(!store_record->old_value_record.value.NeedsPhi());
+    HInstruction* stored_value = FindSubstitute(store_record->stored_value);
+    if (store_record->old_value_record.value.Equals(stored_value)) {
+      eliminated_stores.SetBit(store_id);
     }
   }
 
