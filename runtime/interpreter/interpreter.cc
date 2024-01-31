@@ -272,7 +272,10 @@ static inline JValue Execute(
     ArtMethod *method = shadow_frame.GetMethod();
 
     // If we can continue in JIT and have JITed code available execute JITed code.
-    if (!stay_in_interpreter && !self->IsForceInterpreter() && !shadow_frame.GetForcePopFrame()) {
+    if (!stay_in_interpreter &&
+        !self->IsForceInterpreter() &&
+        !shadow_frame.GetForcePopFrame() &&
+        !shadow_frame.GetNotifyDexPcMoveEvents()) {
       jit::Jit* jit = Runtime::Current()->GetJit();
       if (jit != nullptr) {
         jit->MethodEntered(self, shadow_frame.GetMethod());
