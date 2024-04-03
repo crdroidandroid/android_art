@@ -29,7 +29,7 @@ int32_t memcmp16_generic_static(const uint16_t* s0, const uint16_t* s1, size_t c
   return 0;
 }
 
-namespace art HIDDEN {
+namespace art {
 
 namespace testing {
 

@@ -24,7 +24,7 @@
 #include "arch/instruction_set.h"
 #include "base/macros.h"
 
-namespace art HIDDEN {
+namespace art {
 
 class ArmInstructionSetFeatures;
 class Arm64InstructionSetFeatures;
@@ -36,21 +36,22 @@ class X86_64InstructionSetFeatures;
 class InstructionSetFeatures {
  public:
   // Process a CPU variant string for the given ISA and create an InstructionSetFeatures.
-  EXPORT static std::unique_ptr<const InstructionSetFeatures> FromVariant(
-      InstructionSet isa, const std::string& variant, std::string* error_msg);
+  static std::unique_ptr<const InstructionSetFeatures> FromVariant(InstructionSet isa,
+                                                                   const std::string& variant,
+                                                                   std::string* error_msg);
 
   // Process a CPU variant string for the given ISA and make sure the features advertised
   // are supported by the hardware. This is needed for Pixel3a which wrongly
   // reports itself as cortex-a75.
-  EXPORT static std::unique_ptr<const InstructionSetFeatures> FromVariantAndHwcap(
+  static std::unique_ptr<const InstructionSetFeatures> FromVariantAndHwcap(
       InstructionSet isa, const std::string& variant, std::string* error_msg);
 
   // Parse a bitmap for the given isa and create an InstructionSetFeatures.
-  EXPORT static std::unique_ptr<const InstructionSetFeatures> FromBitmap(InstructionSet isa,
-                                                                         uint32_t bitmap);
+  static std::unique_ptr<const InstructionSetFeatures> FromBitmap(InstructionSet isa,
+                                                                  uint32_t bitmap);
 
   // Turn C pre-processor #defines into the equivalent instruction set features for kRuntimeISA.
-  EXPORT static std::unique_ptr<const InstructionSetFeatures> FromCppDefines();
+  static std::unique_ptr<const InstructionSetFeatures> FromCppDefines();
 
   // Check if run-time detection of instruction set features is supported.
   //
@@ -82,7 +83,7 @@ class InstructionSetFeatures {
 
   // Parse a string of the form "div,-atomic_ldrd_strd" adding and removing these features to
   // create a new InstructionSetFeatures.
-  EXPORT std::unique_ptr<const InstructionSetFeatures> AddFeaturesFromString(
+  std::unique_ptr<const InstructionSetFeatures> AddFeaturesFromString(
       const std::string& feature_list, std::string* error_msg) const WARN_UNUSED;
 
   // Are these features the same as the other given features?
@@ -119,10 +120,10 @@ class InstructionSetFeatures {
   const ArmInstructionSetFeatures* AsArmInstructionSetFeatures() const;
 
   // Down cast this Arm64InstructionFeatures.
-  EXPORT const Arm64InstructionSetFeatures* AsArm64InstructionSetFeatures() const;
+  const Arm64InstructionSetFeatures* AsArm64InstructionSetFeatures() const;
 
   // Down cast this Riscv64InstructionFeatures.
-  EXPORT const Riscv64InstructionSetFeatures* AsRiscv64InstructionSetFeatures() const;
+  const Riscv64InstructionSetFeatures* AsRiscv64InstructionSetFeatures() const;
 
   // Down cast this X86InstructionFeatures.
   const X86InstructionSetFeatures* AsX86InstructionSetFeatures() const;
@@ -151,7 +152,7 @@ class InstructionSetFeatures {
  private:
   DISALLOW_COPY_AND_ASSIGN(InstructionSetFeatures);
 };
-EXPORT std::ostream& operator<<(std::ostream& os, const InstructionSetFeatures& rhs);
+std::ostream& operator<<(std::ostream& os, const InstructionSetFeatures& rhs);
 
 }  // namespace art
 

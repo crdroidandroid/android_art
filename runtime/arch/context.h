@@ -24,7 +24,7 @@
 #include "base/macros.h"
 #include "entrypoints/quick/runtime_entrypoints_list.h"
 
-namespace art HIDDEN {
+namespace art {
 
 class QuickMethodFrameInfo;
 
@@ -33,7 +33,7 @@ class QuickMethodFrameInfo;
 class Context {
  public:
   // Creates a context for the running architecture
-  EXPORT static Context* Create();
+  static Context* Create();
 
   virtual ~Context() {}
 

@@ -29,7 +29,7 @@
 #include "x86/context_x86.h"
 #include "x86_64/context_x86_64.h"
 
-namespace art HIDDEN {
+namespace art {
 
 namespace detail {
 
