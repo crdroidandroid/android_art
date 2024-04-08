@@ -830,24 +830,27 @@ void CompilerDriver::PreCompile(jobject class_loader,
   LoadImageClasses(timings, image_classes);
   VLOG(compiler) << "LoadImageClasses: " << GetMemoryUsageString(false);
 
-  if (compiler_options_->IsAnyCompilationEnabled()) {
-    // Avoid adding the dex files in the case where we aren't going to add compiled methods.
-    // This reduces RAM usage for this case.
-    for (const DexFile* dex_file : dex_files) {
-      // Can be already inserted. This happens for gtests.
-      if (!compiled_methods_.HaveDexFile(dex_file)) {
-        compiled_methods_.AddDexFile(dex_file);
-      }
-    }
-    // Resolve eagerly to prepare for compilation.
-    Resolve(class_loader, dex_files, timings);
-    VLOG(compiler) << "Resolve: " << GetMemoryUsageString(false);
-  }
-
   if (compiler_options_->AssumeClassesAreVerified()) {
     VLOG(compiler) << "Verify none mode specified, skipping verification.";
     SetVerified(class_loader, dex_files, timings);
-  } else if (compiler_options_->IsVerificationEnabled()) {
+  } else {
+    DCHECK(compiler_options_->IsVerificationEnabled());
+
+    if (compiler_options_->IsAnyCompilationEnabled()) {
+      // Avoid adding the dex files in the case where we aren't going to add compiled methods.
+      // This reduces RAM usage for this case.
+      for (const DexFile* dex_file : dex_files) {
+        // Can be already inserted. This happens for gtests.
+        if (!compiled_methods_.HaveDexFile(dex_file)) {
+          compiled_methods_.AddDexFile(dex_file);
+        }
+      }
+    }
+
+    // Resolve eagerly as both verification and compilation benefit from this.
+    Resolve(class_loader, dex_files, timings);
+    VLOG(compiler) << "Resolve: " << GetMemoryUsageString(false);
+
     Verify(class_loader, dex_files, timings);
     VLOG(compiler) << "Verify: " << GetMemoryUsageString(false);
 
