@@ -1750,6 +1750,7 @@ class Dex2Oat final {
 
     // Setup VerifierDeps for compilation and report if we fail to parse the data.
     if (input_vdex_file_ != nullptr) {
+      TimingLogger::ScopedTiming t_dex("Parse Verifier Deps", timings_);
       std::unique_ptr<verifier::VerifierDeps> verifier_deps(
           new verifier::VerifierDeps(dex_files, /*output_only=*/ false));
       if (!verifier_deps->ParseStoredData(dex_files, input_vdex_file_->GetVerifierDepsData())) {
