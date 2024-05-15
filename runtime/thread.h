@@ -1925,7 +1925,7 @@ class EXPORT Thread {
                                         StateAndFlags old_state_and_flags = StateAndFlags(0),
                                         ThreadExitFlag* tef = nullptr,
                                         /*out*/ bool* finished = nullptr)
-      TRY_ACQUIRE_SHARED(true, Locks::mutator_lock_);
+      REQUIRES(!Locks::thread_list_lock_) TRY_ACQUIRE_SHARED(true, Locks::mutator_lock_);
 
   static void ThreadExitCallback(void* arg);
 
