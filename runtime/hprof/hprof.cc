@@ -609,7 +609,7 @@ class Hprof : public SingleRootVisitor {
       if (it == classes_.end()) {
         // first time to see this class
         HprofClassSerialNumber sn = next_class_serial_number_++;
-        classes_.Put(c, sn);
+        classes_.emplace(c, sn);
         // Make sure that we've assigned a string ID for this class' name
         LookupClassNameId(c);
       }
@@ -644,7 +644,7 @@ class Hprof : public SingleRootVisitor {
       return it->second;
     }
     HprofStringId id = next_string_id_++;
-    strings_.Put(string, id);
+    strings_.emplace(string, id);
     return id;
   }
 
@@ -883,9 +883,9 @@ class Hprof : public SingleRootVisitor {
   size_t total_objects_with_stack_trace_ = 0u;
 
   HprofStringId next_string_id_ = 0x400000;
-  SafeMap<std::string, HprofStringId> strings_;
+  std::unordered_map<std::string, HprofStringId> strings_;
   HprofClassSerialNumber next_class_serial_number_ = 1;
-  SafeMap<mirror::Class*, HprofClassSerialNumber> classes_;
+  std::unordered_map<mirror::Class*, HprofClassSerialNumber> classes_;
 
   std::unordered_map<const gc::AllocRecordStackTrace*, HprofStackTraceSerialNumber,
                      gc::HashAllocRecordTypesPtr<gc::AllocRecordStackTrace>,
