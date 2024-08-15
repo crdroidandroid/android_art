@@ -654,6 +654,27 @@ public class ArtManagerLocalTest {
     }
 
     @Test
+    public void testDexoptPackagesFirstBoot() throws Exception {
+        // On first-boot all packages haven't been used and first install time is
+        // 0 which simulates case of system time being advanced by
+        // AlarmManagerService after package installation
+        lenient().when(mDexUseManager.getPackageLastUsedAtMs(any())).thenReturn(0l);
+
+        var result = DexoptResult.create();
+        var cancellationSignal = new CancellationSignal();
+
+        // PKG_NAME_1 and PKG_NAME_2 should be dexopted.
+        doReturn(result)
+                .when(mDexoptHelper)
+                .dexopt(any(), inAnyOrder(PKG_NAME_1, PKG_NAME_2),
+                        argThat(params -> params.getReason().equals("first-boot")), any(), any(),
+                        any(), any());
+
+        mArtManagerLocal.dexoptPackages(mSnapshot, "first-boot", cancellationSignal,
+                null /* processCallbackExecutor */, null /* processCallback */);
+    }
+
+    @Test
     public void testDexoptPackagesBootAfterMainlineUpdate() throws Exception {
         var result = DexoptResult.create();
         var cancellationSignal = new CancellationSignal();

@@ -1157,6 +1157,13 @@ public final class ArtManagerLocal {
                 packages = filterAndSortByLastActiveTime(
                         packages, false /* keepRecent */, false /* descending */);
                 break;
+            case ReasonMapping.REASON_FIRST_BOOT:
+                // Don't filter the default package list and no need to sort
+                // as in some cases the system time can advance during bootup
+                // after package installation and cause filtering to exclude
+                // all packages when pm.dexopt.downgrade_after_inactive_days
+                // is set. See aosp/3237478 for more details.
+                break;
             default:
                 // Actually, the sorting is only needed for background dexopt, but we do it for all
                 // cases for simplicity.
