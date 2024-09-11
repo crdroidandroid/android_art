@@ -466,6 +466,7 @@ size_t ThreadList::RunCheckpoint(Closure* checkpoint_function,
     return thread == nullptr;
   }));
   Thread::DCheckUnregisteredEverywhere(&tefs[0], &tefs[nthreads - 1]);
+  delete[] tefs;
 
   if (kIsDebugBuild && allow_lock_checking & !acquire_mutator_lock) {
     self->AllowPreMonitorMutexes();
