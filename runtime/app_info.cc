@@ -28,11 +28,11 @@ static constexpr const char* kUnknownValue = "unknown";
 AppInfo::AppInfo()
     : update_mutex_("app_info_update_mutex", LockLevel::kGenericBottomLock) {}
 
-// Converts VMRuntime.java constansts to a CodeType.
+// Converts VMRuntime.java constants to a CodeType.
 AppInfo::CodeType AppInfo::FromVMRuntimeConstants(uint32_t code_type) {
   switch (code_type) {
     case kVMRuntimePrimaryApk : return CodeType::kPrimaryApk;
-    case kVMRuntimeSplitApk : return CodeType::kPrimaryApk;
+    case kVMRuntimeSplitApk : return CodeType::kSplitApk;
     case kVMRuntimeSecondaryDex : return CodeType::kSecondaryDex;
     default:
       LOG(WARNING) << "Unknown code type: " << code_type;
