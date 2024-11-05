@@ -480,17 +480,10 @@ void Class::SetReferenceInstanceOffsets(uint32_t new_reference_offsets) {
 }
 
 bool Class::IsInSamePackage(std::string_view descriptor1, std::string_view descriptor2) {
-  size_t i = 0;
-  size_t min_length = std::min(descriptor1.size(), descriptor2.size());
-  while (i < min_length && descriptor1[i] == descriptor2[i]) {
-    ++i;
-  }
-  if (descriptor1.find('/', i) != std::string_view::npos ||
-      descriptor2.find('/', i) != std::string_view::npos) {
-    return false;
-  } else {
-    return true;
-  }
+  static_assert(std::string_view::npos + 1u == 0u);
+  size_t d1_after_package = descriptor1.rfind('/') + 1u;
+  return descriptor2.starts_with(descriptor1.substr(0u, d1_after_package)) &&
+         descriptor2.find('/', d1_after_package) == std::string_view::npos;
 }
 
 bool Class::IsInSamePackage(ObjPtr<Class> that) {
