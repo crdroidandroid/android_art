@@ -515,8 +515,18 @@ bool Class::IsInSamePackage(ObjPtr<Class> that) {
     return true;
   }
   // Compare the package part of the descriptor string.
-  std::string temp1, temp2;
-  return IsInSamePackage(klass1->GetDescriptor(&temp1), klass2->GetDescriptor(&temp2));
+  if (UNLIKELY(klass1->IsProxyClass()) || UNLIKELY(klass2->IsProxyClass())) {
+    std::string temp1, temp2;
+    return IsInSamePackage(klass1->GetDescriptor(&temp1), klass2->GetDescriptor(&temp2));
+  }
+  if (UNLIKELY(klass1->IsPrimitive()) || UNLIKELY(klass2->IsPrimitive())) {
+    if (klass1->IsPrimitive() && klass2->IsPrimitive()) {
+      return true;
+    }
+    ObjPtr<Class> other_class = klass1->IsPrimitive() ? klass2 : klass1;
+    return other_class->GetDescriptorView().find('/') == std::string_view::npos;
+  }
+  return IsInSamePackage(klass1->GetDescriptorView(), klass2->GetDescriptorView());
 }
 
 bool Class::IsThrowableClass() {
