@@ -38,56 +38,52 @@ void AppendPrettyDescriptor(const char* descriptor, std::string* result) {
   }
 
   // Reference or primitive?
-  bool primitive = false;
   if (*c == 'L') {
     // "[[La/b/C;" -> "a.b.C[][]".
-    c++;  // Skip the 'L'.
+    std::string_view stripped = std::string_view(c + 1);  // Skip the 'L'...
+    if (stripped.ends_with(';')) {
+      stripped.remove_suffix(1u);  // ...and remove the semicolon.
+    }
+    // At this point, `stripped` is of the form "fully/qualified/Type".
+    // Append it to the `*result` and replace all '/'s with '.' in place.
+    size_t old_size = result->size();
+    *result += stripped;
+    std::replace(result->begin() + old_size, result->end(), '/', '.');
   } else {
-    primitive = true;
     // "[[B" -> "byte[][]".
+    std::string_view pretty_primitive;
     switch (*c) {
       case 'B':
-        c = "byte";
+        pretty_primitive = "byte";
         break;
       case 'C':
-        c = "char";
+        pretty_primitive = "char";
         break;
       case 'D':
-        c = "double";
+        pretty_primitive = "double";
         break;
       case 'F':
-        c = "float";
+        pretty_primitive = "float";
         break;
       case 'I':
-        c = "int";
+        pretty_primitive = "int";
         break;
       case 'J':
-        c = "long";
+        pretty_primitive = "long";
         break;
       case 'S':
-        c = "short";
+        pretty_primitive = "short";
         break;
       case 'Z':
-        c = "boolean";
+        pretty_primitive = "boolean";
         break;
       case 'V':
-        c = "void";
+        pretty_primitive = "void";
         break;  // Used when decoding return types.
       default: result->append(descriptor); return;
     }
+    result->append(pretty_primitive);
   }
-
-  // At this point, 'c' is a string of the form "fully/qualified/Type;" or
-  // "primitive". In the former case, rewrite the type with '.' instead of '/':
-  std::string temp(c);
-  if (!primitive) {
-    std::replace(temp.begin(), temp.end(), '/', '.');
-    // ...and remove the semicolon:
-    if (temp.back() == ';') {
-      temp.pop_back();
-    }
-  }
-  result->append(temp);
 
   // Finally, add 'dim' "[]" pairs:
   for (size_t i = 0; i < dim; ++i) {
