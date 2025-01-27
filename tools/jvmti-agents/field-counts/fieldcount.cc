@@ -242,8 +242,10 @@ static jint AgentStart(JavaVM* vm, char* options, bool is_onload) {
   CHECK_JVMTI(jvmti->SetEventCallbacks(&cb, sizeof(cb)));
   if (is_onload) {
     unsigned char* ptr = nullptr;
-    CHECK_JVMTI(jvmti->Allocate(strlen(options) + 1, &ptr));
-    strcpy(reinterpret_cast<char*>(ptr), options);
+    size_t options_length = strlen(options) + 1;
+    CHECK_JVMTI(jvmti->Allocate(options_length, &ptr));
+    strncpy(reinterpret_cast<char*>(ptr), options, options_length);
+    ptr[options_length - 1] = '\0';  // Ensure null termination
     CHECK_JVMTI(jvmti->SetEnvironmentLocalStorage(ptr));
     CHECK_JVMTI(jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_VM_INIT, nullptr));
   } else {
