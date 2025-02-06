@@ -870,7 +870,8 @@ static void ReportNextBootAnimationProgress(uint32_t current_compilation,
                                             uint32_t number_of_compilations) {
   // We arbitrarily show progress until 90%, expecting that our compilations take a large chunk of
   // boot time.
-  uint32_t value = (90 * current_compilation) / number_of_compilations;
+  uint32_t value =
+      number_of_compilations != 0 ? (90 * current_compilation) / number_of_compilations : 90;
   SetProperty("service.bootanim.progress", std::to_string(value));
 }
 
