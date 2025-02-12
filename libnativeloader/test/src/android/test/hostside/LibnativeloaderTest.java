@@ -116,8 +116,10 @@ public class LibnativeloaderTest extends BaseHostJUnit4Test {
         ctx.mDevice.uninstallPackage("android.test.app.data");
 
         String cleanupPathList = testInfo.properties().get(CLEANUP_PATHS_KEY);
-        CleanupPaths cleanup = new CleanupPaths(ctx.mDevice, cleanupPathList);
-        cleanup.cleanup();
+        if (cleanupPathList != null) {
+            CleanupPaths cleanup = new CleanupPaths(ctx.mDevice, cleanupPathList);
+            cleanup.cleanup();
+        }
     }
 
     @Test
