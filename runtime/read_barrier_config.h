@@ -93,7 +93,7 @@ EXPORT extern const bool gUseUserfaultfd;
 #endif
 
 // Disabled for performance reasons.
-static constexpr bool kCheckDebugDisallowReadBarrierCount = kIsDebugBuild;
+static constexpr bool kCheckDebugDisallowReadBarrierCount = false;
 
 }  // namespace art
 
