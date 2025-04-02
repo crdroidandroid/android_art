@@ -63,14 +63,10 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
       options.GetOrDefault(RuntimeArgumentMap::JITZygotePoolThreadPthreadPriority);
 
   // Set default optimize threshold to aid with checking defaults.
-  jit_options->optimize_threshold_ = kIsDebugBuild
-      ? (kSlowMode ? kJitSlowStressDefaultOptimizeThreshold : kJitStressDefaultOptimizeThreshold)
-      : kJitDefaultOptimizeThreshold;
+  jit_options->optimize_threshold_ = kJitDefaultOptimizeThreshold;
 
   // Set default warm-up threshold to aid with checking defaults.
-  jit_options->warmup_threshold_ = kIsDebugBuild
-      ? (kSlowMode ? kJitSlowStressDefaultWarmupThreshold : kJitStressDefaultWarmupThreshold)
-      : kJitDefaultWarmupThreshold;
+  jit_options->warmup_threshold_ = kJitDefaultWarmupThreshold;
 
   if (options.Exists(RuntimeArgumentMap::JITOptimizeThreshold)) {
     jit_options->optimize_threshold_ = *options.Get(RuntimeArgumentMap::JITOptimizeThreshold);
