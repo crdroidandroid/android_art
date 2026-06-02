@@ -126,7 +126,7 @@ static constexpr size_t kDefaultMinDexFilesForSwap = 2;
 static constexpr size_t kDefaultMinDexFileCumulativeSizeForSwap = 20 * MB;
 
 // Compiler filter override for very large apps.
-static constexpr CompilerFilter::Filter kLargeAppFilter = CompilerFilter::kVerify;
+static constexpr CompilerFilter::Filter kLargeAppFilter = CompilerFilter::kSpeedProfile;
 
 static int original_argc;
 static char** original_argv;
@@ -1539,7 +1539,7 @@ class Dex2Oat final {
       // If we need to downgrade the compiler-filter for size reasons, do that early before we read
       // it below for creating verification callbacks.
       if (!CompilerFilter::IsAsGoodAs(kLargeAppFilter, compiler_options_->GetCompilerFilter())) {
-        LOG(INFO) << "Very large app, downgrading to verify.";
+        LOG(INFO) << "Very large app, using speed-profile.";
         compiler_options_->SetCompilerFilter(kLargeAppFilter);
       }
     }
