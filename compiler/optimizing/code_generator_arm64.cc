@@ -1799,6 +1799,35 @@ static CPURegister AcquireFPOrCoreCPURegisterOfSize(vixl::aarch64::MacroAssemble
       : CPURegister(temps->AcquireVRegisterOfSize(size_in_bits));
 }
 
+static bool AreAdjacentNativeStackSlots(Location first,
+                                        Location second,
+                                        vixl::aarch64::MacroAssembler* masm) {
+  if (!first.IsDoubleStackSlot() || !second.IsDoubleStackSlot()) {
+    return false;
+  }
+  int64_t first_offset = first.GetStackIndex();
+  return second.GetStackIndex() == first_offset + kXRegSizeInBytes &&
+         masm->IsImmLSPair(first_offset, WhichPowerOf2(kXRegSizeInBytes));
+}
+
+static bool CanStoreRegisterPairToNativeStack(const MoveOperands* first,
+                                              const MoveOperands* second,
+                                              vixl::aarch64::MacroAssembler* masm) {
+  bool first_is_fp = DataType::IsFloatingPointType(first->GetType());
+  bool second_is_fp = DataType::IsFloatingPointType(second->GetType());
+  Location first_source = first->GetSource();
+  Location second_source = second->GetSource();
+  return !first->IsRedundant() &&
+         !second->IsRedundant() &&
+         DataType::Is64BitType(first->GetType()) &&
+         DataType::Is64BitType(second->GetType()) &&
+         AreAdjacentNativeStackSlots(first->GetDestination(), second->GetDestination(), masm) &&
+         ((!first_is_fp && !second_is_fp &&
+           first_source.IsRegister() && second_source.IsRegister()) ||
+          (first_is_fp && second_is_fp &&
+           first_source.IsFpuRegister() && second_source.IsFpuRegister()));
+}
+
 void CodeGeneratorARM64::MoveLocation(Location destination,
                                       Location source,
                                       DataType::Type dst_type) {
@@ -1933,6 +1962,33 @@ void CodeGeneratorARM64::MoveLocation(Location destination,
       __ Str(temp, StackOperandFrom(destination));
     }
   }
+}
+
+void CodeGeneratorARM64::EmitCriticalNativeArgumentMoves(HParallelMove* parallel_move) {
+  vixl::aarch64::MacroAssembler* masm = GetVIXLAssembler();
+  for (size_t i = 0, num = parallel_move->NumMoves(); i + 1u < num; ++i) {
+    MoveOperands* first = parallel_move->MoveOperandsAt(i);
+    MoveOperands* second = parallel_move->MoveOperandsAt(i + 1u);
+    if (!CanStoreRegisterPairToNativeStack(first, second, masm)) {
+      continue;
+    }
+    Location first_source = first->GetSource();
+    Location second_source = second->GetSource();
+    Location first_destination = first->GetDestination();
+    if (first_source.IsRegister()) {
+      __ Stp(RegisterFrom(first_source, first->GetType()),
+             RegisterFrom(second_source, second->GetType()),
+             StackOperandFrom(first_destination));
+    } else {
+      __ Stp(FPRegisterFrom(first_source, first->GetType()),
+             FPRegisterFrom(second_source, second->GetType()),
+             StackOperandFrom(first_destination));
+    }
+    first->Eliminate();
+    second->Eliminate();
+    ++i;
+  }
+  GetMoveResolver()->EmitNativeCode(parallel_move);
 }
 
 void CodeGeneratorARM64::Load(DataType::Type type,

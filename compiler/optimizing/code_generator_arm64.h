@@ -1189,6 +1189,8 @@ class CodeGeneratorARM64 : public CodeGenerator {
            BakerReadBarrierSecondRegField::Encode(kBakerReadBarrierInvalidEncodedReg);
   }
 
+  void EmitCriticalNativeArgumentMoves(HParallelMove* parallel_move) override;
+
   void CompileBakerReadBarrierThunk(Arm64Assembler& assembler,
                                     uint32_t encoded_data,
                                     /*out*/ std::string* debug_name);

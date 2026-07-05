@@ -904,6 +904,8 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
 
   void FinishCriticalNativeFrameSetup(size_t out_frame_size, /*inout*/HParallelMove* parallel_move);
 
+  virtual void EmitCriticalNativeArgumentMoves(HParallelMove* parallel_move);
+
   static std::string_view GetCriticalNativeShorty(HInvokeStaticOrDirect* invoke);
 
   OptimizingCompilerStats* stats_;

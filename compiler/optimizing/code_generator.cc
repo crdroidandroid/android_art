@@ -511,6 +511,10 @@ void CodeGenerator::FinishCriticalNativeFrameSetup(size_t out_frame_size,
     }
   }
   // Emit the moves.
+  EmitCriticalNativeArgumentMoves(parallel_move);
+}
+
+void CodeGenerator::EmitCriticalNativeArgumentMoves(HParallelMove* parallel_move) {
   GetMoveResolver()->EmitNativeCode(parallel_move);
 }
 
