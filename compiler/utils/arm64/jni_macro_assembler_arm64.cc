@@ -436,7 +436,34 @@ void Arm64JNIMacroAssembler::MoveArguments(ArrayRef<ArgumentLocation> dests,
           Store(dest.GetFrameOffset(), src.GetRegister(), dest.GetSize());
         }
       } else {
-        Copy(dest.GetFrameOffset(), src.GetFrameOffset(), dest.GetSize());
+        size_t size = dest.GetSize();
+        size_t src_offset = src.GetFrameOffset().SizeValue();
+        size_t dest_offset = dest.GetFrameOffset().SizeValue();
+        size_t offset_limit = size == 8u ? kStpXOffsetCutoff : kStpWOffsetCutoff;
+        if ((size == 4u || size == 8u) &&
+            i + 1u != arg_count &&
+            refs[i + 1u] == kInvalidReferenceOffset &&
+            !srcs[i + 1u].IsRegister() &&
+            !dests[i + 1u].IsRegister() &&
+            srcs[i + 1u].GetSize() == size &&
+            dests[i + 1u].GetSize() == size &&
+            srcs[i + 1u].GetFrameOffset().SizeValue() ==
+                src_offset + size &&
+            dests[i + 1u].GetFrameOffset().SizeValue() ==
+                dest_offset + size &&
+            IsAlignedParam(src_offset, size) &&
+            IsAlignedParam(dest_offset, size) &&
+            src_offset < offset_limit &&
+            dest_offset < offset_limit) {
+          UseScratchRegisterScope temps(asm_.GetVIXLAssembler());
+          Register scratch = size == 8u ? temps.AcquireX() : temps.AcquireW();
+          Register scratch2 = size == 8u ? temps.AcquireX() : temps.AcquireW();
+          ___ Ldp(scratch, scratch2, MEM_OP(sp, src_offset));
+          ___ Stp(scratch, scratch2, MEM_OP(sp, dest_offset));
+          ++i;
+        } else {
+          Copy(dest.GetFrameOffset(), src.GetFrameOffset(), dest.GetSize());
+        }
       }
     }
   }
