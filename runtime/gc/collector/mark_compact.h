@@ -599,10 +599,16 @@ class MarkCompact final : public GarbageCollector {
   void UnregisterUffd(uint8_t* start, size_t len);
 
   // Called by SIGBUS handler to compact and copy/map the fault page in moving space.
-  void ConcurrentlyProcessMovingPage(uint8_t* fault_page,
-                                     uint8_t* buf,
-                                     size_t nr_moving_space_used_pages,
-                                     bool tolerate_enoent) REQUIRES_SHARED(Locks::mutator_lock_);
+  void PrefetchAdjacentPages(uint8_t* fault_page,
+                             uint8_t* buf,
+                             size_t nr_moving_space_used_pages,
+                             bool tolerate_enoent) REQUIRES_SHARED(Locks::mutator_lock_);
+  size_t ConcurrentlyProcessMovingPage(uint8_t* fault_page,
+                                       uint8_t* buf,
+                                       size_t nr_moving_space_used_pages,
+                                       size_t max_pages,
+                                       bool tolerate_enoent,
+                                       bool wait_for_page) REQUIRES_SHARED(Locks::mutator_lock_);
   // Called by SIGBUS handler to process and copy/map the fault page in linear-alloc.
   void ConcurrentlyProcessLinearAllocPage(uint8_t* fault_page, bool tolerate_enoent)
       REQUIRES_SHARED(Locks::mutator_lock_);
@@ -643,6 +649,9 @@ class MarkCompact final : public GarbageCollector {
   PageState GetMovingPageState(size_t idx) {
     return GetPageStateFromWord(moving_pages_status_[idx].load(std::memory_order_acquire));
   }
+
+  bool IsMovingPagePrefetchable(size_t page_idx, PageState state)
+      REQUIRES_SHARED(Locks::mutator_lock_);
 
   // Add/update <class, obj> pair if class > obj and obj is the lowest address
   // object of class.
