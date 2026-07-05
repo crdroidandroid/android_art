@@ -16,12 +16,17 @@
 
 #include "jit_code_cache.h"
 
+#include <algorithm>
+#include <atomic>
+#include <limits>
+#include <memory>
 #include <sstream>
 
 #include <android-base/logging.h>
 
 #include "arch/context.h"
 #include "art_method-inl.h"
+#include "base/bit_utils.h"
 #include "base/histogram-inl.h"
 #include "base/logging.h"  // For VLOG.
 #include "base/membarrier.h"
@@ -196,6 +201,241 @@ class JitCodeCache::JniStubData {
   std::vector<ArtMethod*> methods_;
 };
 
+class JitCodeCache::PcRangeCache {
+ public:
+  explicit PcRangeCache(size_t requested_entries)
+      : ways_(GetAssociativity()),
+        set_count_(GetSetCount(requested_entries, ways_)),
+        entries_(std::make_unique<Entry[]>(set_count_ * ways_)),
+        generation_(1),
+        age_(1),
+        hits_(0),
+        misses_(0),
+        inserts_(0),
+        clears_(0) {
+    DCHECK_NE(set_count_, 0u);
+  }
+
+  OatQuickMethodHeader* Lookup(uintptr_t pc, ArtMethod* method) {
+    const bool check_method = method != nullptr && !method->IsNative();
+    const uint32_t generation = generation_.load(std::memory_order_acquire);
+    const size_t first_entry = FirstEntry(pc);
+    for (size_t i = 0; i != ways_; ++i) {
+      Entry& entry = entries_[first_entry + i];
+      const uint32_t sequence = entry.sequence.load(std::memory_order_acquire);
+      if ((sequence & 1u) != 0u) {
+        continue;
+      }
+      if (entry.generation.load(std::memory_order_relaxed) != generation) {
+        continue;
+      }
+      const uintptr_t start = entry.start.load(std::memory_order_relaxed);
+      const uintptr_t end = entry.end.load(std::memory_order_relaxed);
+      if (pc < start || pc >= end) {
+        continue;
+      }
+      ArtMethod* cached_method = entry.method.load(std::memory_order_relaxed);
+      if (check_method && cached_method != method) {
+        continue;
+      }
+      OatQuickMethodHeader* header = entry.header.load(std::memory_order_relaxed);
+      if (header == nullptr ||
+          entry.sequence.load(std::memory_order_acquire) != sequence ||
+          generation_.load(std::memory_order_acquire) != generation) {
+        continue;
+      }
+      entry.age.store(age_.fetch_add(1, std::memory_order_relaxed) + 1u,
+                      std::memory_order_relaxed);
+      hits_.fetch_add(1, std::memory_order_relaxed);
+      return header;
+    }
+    misses_.fetch_add(1, std::memory_order_relaxed);
+    return nullptr;
+  }
+
+  void Insert(uintptr_t pc, OatQuickMethodHeader* header, ArtMethod* method) {
+    DCHECK(header != nullptr);
+    const uintptr_t start = reinterpret_cast<uintptr_t>(header->GetCode());
+    const uintptr_t end = start + header->GetCodeSize();
+    if (pc < start || pc >= end) {
+      return;
+    }
+    const uint32_t generation = generation_.load(std::memory_order_acquire);
+    Entry& entry = entries_[SelectEntry(pc, generation)];
+    uint32_t sequence;
+    if (!Claim(entry, &sequence)) {
+      return;
+    }
+    entry.start.store(start, std::memory_order_relaxed);
+    entry.end.store(end, std::memory_order_relaxed);
+    entry.header.store(header, std::memory_order_relaxed);
+    entry.method.store(method, std::memory_order_relaxed);
+    entry.age.store(age_.fetch_add(1, std::memory_order_relaxed) + 1u,
+                    std::memory_order_relaxed);
+    entry.generation.store(generation, std::memory_order_relaxed);
+    uint32_t next_sequence = (sequence + 2u) & ~1u;
+    entry.sequence.store(next_sequence == 0u ? 2u : next_sequence, std::memory_order_release);
+    inserts_.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  void Clear() {
+    generation_.fetch_add(1, std::memory_order_acq_rel);
+    clears_.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  void ResetStats() {
+    hits_.store(0, std::memory_order_relaxed);
+    misses_.store(0, std::memory_order_relaxed);
+    inserts_.store(0, std::memory_order_relaxed);
+    clears_.store(0, std::memory_order_relaxed);
+  }
+
+  void Dump(std::ostream& os) const {
+    os << "JIT PC range cache entries: " << EntryCount() << "\n"
+       << "JIT PC range cache associativity: " << ways_ << "\n"
+       << "JIT PC range cache hits: " << hits_.load(std::memory_order_relaxed) << "\n"
+       << "JIT PC range cache misses: " << misses_.load(std::memory_order_relaxed) << "\n"
+       << "JIT PC range cache inserts: " << inserts_.load(std::memory_order_relaxed) << "\n"
+       << "JIT PC range cache clears: " << clears_.load(std::memory_order_relaxed) << "\n";
+  }
+
+ private:
+  struct Entry {
+    Entry()
+        : start(0),
+          end(0),
+          header(nullptr),
+          method(nullptr),
+          generation(0),
+          sequence(0),
+          age(0) {}
+
+    std::atomic<uintptr_t> start;
+    std::atomic<uintptr_t> end;
+    std::atomic<OatQuickMethodHeader*> header;
+    std::atomic<ArtMethod*> method;
+    std::atomic<uint32_t> generation;
+    std::atomic<uint32_t> sequence;
+    std::atomic<uint32_t> age;
+  };
+
+  static_assert(std::atomic<uintptr_t>::is_always_lock_free);
+  static_assert(std::atomic<OatQuickMethodHeader*>::is_always_lock_free);
+  static_assert(std::atomic<ArtMethod*>::is_always_lock_free);
+  static_assert(std::atomic<uint32_t>::is_always_lock_free);
+
+  static size_t GetAssociativity() {
+    return Is64BitInstructionSet(kRuntimeQuickCodeISA) ? 4u : 2u;
+  }
+
+  static size_t GetSetCount(size_t requested_entries, size_t ways) {
+    size_t entries = std::min(requested_entries, kMaxPcRangeCacheEntries);
+    entries = std::max(entries, ways);
+    return TruncToPowerOfTwo(entries / ways);
+  }
+
+  static size_t HashPc(uintptr_t pc) {
+    switch (kRuntimeQuickCodeISA) {
+      case InstructionSet::kArm: {
+        uintptr_t value = pc >> 3;
+        value ^= value >> 11;
+        return value * 0x9e3779b1u;
+      }
+      case InstructionSet::kArm64: {
+        uint64_t value = pc >> 4;
+        value ^= value >> 17;
+        value ^= value >> 31;
+        return value * UINT64_C(0x9e3779b97f4a7c15);
+      }
+      case InstructionSet::kRiscv64: {
+        uint64_t value = pc >> 1;
+        value ^= value >> 13;
+        value ^= value >> 29;
+        return value * UINT64_C(0xbf58476d1ce4e5b9);
+      }
+      case InstructionSet::kX86: {
+        uintptr_t value = pc;
+        value ^= value >> 7;
+        value ^= value >> 16;
+        return value * 0x85ebca6bu;
+      }
+      case InstructionSet::kX86_64: {
+        uint64_t value = pc;
+        value ^= value >> 11;
+        value ^= value >> 33;
+        return value * UINT64_C(0xc2b2ae3d27d4eb4f);
+      }
+      case InstructionSet::kThumb2:
+      case InstructionSet::kNone:
+        break;
+    }
+    return pc;
+  }
+
+  size_t EntryCount() const {
+    return set_count_ * ways_;
+  }
+
+  size_t FirstEntry(uintptr_t pc) const {
+    return (HashPc(pc) & (set_count_ - 1u)) * ways_;
+  }
+
+  size_t SelectEntry(uintptr_t pc, uint32_t generation) const {
+    const size_t first_entry = FirstEntry(pc);
+    size_t victim = first_entry;
+    uint32_t oldest_age = std::numeric_limits<uint32_t>::max();
+    for (size_t i = 0; i != ways_; ++i) {
+      const size_t index = first_entry + i;
+      const Entry& entry = entries_[index];
+      const uint32_t sequence = entry.sequence.load(std::memory_order_acquire);
+      if ((sequence & 1u) != 0u) {
+        continue;
+      }
+      if (entry.generation.load(std::memory_order_relaxed) != generation ||
+          entry.start.load(std::memory_order_relaxed) == 0u) {
+        return index;
+      }
+      const uint32_t entry_age = entry.age.load(std::memory_order_relaxed);
+      if (entry_age < oldest_age) {
+        oldest_age = entry_age;
+        victim = index;
+      }
+    }
+    return victim;
+  }
+
+  bool Claim(Entry& entry, uint32_t* sequence) {
+    uint32_t expected = entry.sequence.load(std::memory_order_relaxed);
+    for (size_t i = 0; i != ways_; ++i) {
+      if ((expected & 1u) != 0u) {
+        return false;
+      }
+      if (entry.sequence.compare_exchange_weak(expected,
+                                               expected | 1u,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_relaxed)) {
+        *sequence = expected;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const size_t ways_;
+  const size_t set_count_;
+  std::unique_ptr<Entry[]> entries_;
+  std::atomic<uint32_t> generation_;
+  std::atomic<uint32_t> age_;
+  std::atomic<uint32_t> hits_;
+  std::atomic<uint32_t> misses_;
+  std::atomic<uint32_t> inserts_;
+  std::atomic<uint32_t> clears_;
+};
+
+size_t JitCodeCache::GetDefaultPcRangeCacheEntries() {
+  return Is64BitInstructionSet(kRuntimeQuickCodeISA) ? 256u : 128u;
+}
+
 JitCodeCache* JitCodeCache::Create(bool used_only_for_profile_data,
                                    bool rwx_memory_allowed,
                                    bool is_zygote,
@@ -240,7 +480,8 @@ JitCodeCache* JitCodeCache::Create(bool used_only_for_profile_data,
     runtime->AddGeneratedCodeRange(exec_pages->Begin(), exec_pages->Size());
   }
 
-  std::unique_ptr<JitCodeCache> jit_code_cache(new JitCodeCache());
+  std::unique_ptr<JitCodeCache> jit_code_cache(
+      new JitCodeCache(runtime->GetJITOptions()->GetPcRangeCacheEntries()));
   if (is_zygote) {
     // Zygote should never collect code to share the memory with the children.
     jit_code_cache->garbage_collect_code_ = false;
@@ -257,10 +498,13 @@ JitCodeCache* JitCodeCache::Create(bool used_only_for_profile_data,
   return jit_code_cache.release();
 }
 
-JitCodeCache::JitCodeCache()
+JitCodeCache::JitCodeCache(size_t pc_range_cache_entries)
     : is_weak_access_enabled_(true),
       inline_cache_cond_("Jit inline cache condition variable", *Locks::jit_lock_),
       reserved_capacity_(GetInitialCapacity() * kReservedCapacityMultiplier),
+      pc_range_cache_(pc_range_cache_entries == 0u
+                          ? nullptr
+                          : std::make_unique<PcRangeCache>(pc_range_cache_entries)),
       zygote_map_(&shared_region_),
       lock_cond_("Jit code cache condition variable", *Locks::jit_lock_),
       collection_in_progress_(false),
@@ -498,6 +742,7 @@ void JitCodeCache::FreeCodeAndData(const void* code_ptr) {
     // No need to free, this is shared memory.
     return;
   }
+  ClearPcRangeCache();
   uintptr_t allocation = FromCodeToAllocation(code_ptr);
   const uint8_t* data = nullptr;
   if (OatQuickMethodHeader::FromCodePointer(code_ptr)->IsOptimized()) {
@@ -505,6 +750,12 @@ void JitCodeCache::FreeCodeAndData(const void* code_ptr) {
   }  // else this is a JNI stub without any data.
 
   FreeLocked(&private_region_, reinterpret_cast<uint8_t*>(allocation), data);
+}
+
+void JitCodeCache::ClearPcRangeCache() {
+  if (pc_range_cache_ != nullptr) {
+    pc_range_cache_->Clear();
+  }
 }
 
 void JitCodeCache::FreeAllMethodHeaders(
@@ -560,6 +811,7 @@ void JitCodeCache::FreeAllMethodHeaders(
 void JitCodeCache::RemoveMethodsIn(Thread* self, const LinearAlloc& alloc) {
   ScopedTrace trace(__PRETTY_FUNCTION__);
   ScopedDebugDisallowReadBarriers sddrb(self);
+  ClearPcRangeCache();
   // We use a set to first collect all method_headers whose code need to be
   // removed. We need to free the underlying code after we remove CHA dependencies
   // for entries in this set. And it's more efficient to iterate through
@@ -830,6 +1082,11 @@ bool JitCodeCache::Commit(Thread* self,
           }
         }
       }
+      if (compilation_kind != CompilationKind::kOsr && pc_range_cache_ != nullptr) {
+        pc_range_cache_->Insert(reinterpret_cast<uintptr_t>(method_header->GetEntryPoint()),
+                                method_header,
+                                method);
+      }
       if (compilation_kind == CompilationKind::kOsr) {
         ScopedDebugDisallowReadBarriers sddrb(self);
         WriterMutexLock mu2(self, *Locks::jit_mutator_lock_);
@@ -893,6 +1150,7 @@ bool JitCodeCache::RemoveMethod(ArtMethod* method, bool release_memory) {
 }
 
 bool JitCodeCache::RemoveMethodLocked(ArtMethod* method, bool release_memory) {
+  ClearPcRangeCache();
   if (LIKELY(!method->IsNative())) {
     auto it = profiling_infos_.find(method);
     if (it != profiling_infos_.end()) {
@@ -990,6 +1248,7 @@ void JitCodeCache::MoveObsoleteMethod(ArtMethod* old_method, ArtMethod* new_meth
     node.key() = new_method;
     method_code_map_reversed_.insert(std::move(node));
   }
+  ClearPcRangeCache();
 }
 
 void JitCodeCache::TransitionToDebuggable() {
@@ -1180,6 +1439,7 @@ void JitCodeCache::RemoveUnmarkedCode(Thread* self) {
   std::unordered_set<OatQuickMethodHeader*> method_headers;
   ScopedDebugDisallowReadBarriers sddrb(self);
   MutexLock mu(self, *Locks::jit_lock_);
+  ClearPcRangeCache();
   // Iterate over all zombie code and remove entries that are not marked.
   for (auto it = processed_zombie_code_.begin(); it != processed_zombie_code_.end();) {
     const void* code_ptr = *it;
@@ -1403,6 +1663,13 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
     CHECK(method != nullptr);
   }
 
+  if (pc_range_cache_ != nullptr) {
+    OatQuickMethodHeader* method_header = pc_range_cache_->Lookup(pc, method);
+    if (method_header != nullptr) {
+      return method_header;
+    }
+  }
+
   Thread* self = Thread::Current();
   ScopedDebugDisallowReadBarriers sddrb(self);
   OatQuickMethodHeader* method_header = nullptr;
@@ -1429,7 +1696,11 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
     if (shared_region_.IsInExecSpace(pc_ptr)) {
       const void* code_ptr = zygote_map_.GetCodeFor(method, pc);
       if (code_ptr != nullptr) {
-        return OatQuickMethodHeader::FromCodePointer(code_ptr);
+        OatQuickMethodHeader* header = OatQuickMethodHeader::FromCodePointer(code_ptr);
+        if (pc_range_cache_ != nullptr) {
+          pc_range_cache_->Insert(pc, header, method);
+        }
+        return header;
       }
     }
     {
@@ -1444,6 +1715,11 @@ OatQuickMethodHeader* JitCodeCache::LookupMethodHeader(uintptr_t pc, ArtMethod* 
         if (OatQuickMethodHeader::FromCodePointer(code_ptr)->Contains(pc)) {
           method_header = OatQuickMethodHeader::FromCodePointer(code_ptr);
           found_method = it->second;
+          auto osr_it = osr_code_map_.find(found_method);
+          if (pc_range_cache_ != nullptr &&
+              (osr_it == osr_code_map_.end() || osr_it->second != code_ptr)) {
+            pc_range_cache_->Insert(pc, method_header, found_method);
+          }
         }
       }
     }
@@ -1886,6 +2162,11 @@ void JitCodeCache::Dump(std::ostream& os) {
      << "Total number of JIT compilations for on stack replacement: "
         << number_of_osr_compilations_ << "\n"
      << "Total number of JIT code cache collections: " << number_of_collections_ << std::endl;
+  if (pc_range_cache_ != nullptr) {
+    pc_range_cache_->Dump(os);
+  } else {
+    os << "JIT PC range cache: disabled\n";
+  }
   histogram_stack_map_memory_use_.PrintMemoryUse(os);
   histogram_code_memory_use_.PrintMemoryUse(os);
   histogram_profiling_info_memory_use_.PrintMemoryUse(os);
@@ -1948,6 +2229,10 @@ void JitCodeCache::PostForkChildAction(bool is_system_server, bool is_zygote) {
   histogram_stack_map_memory_use_.Reset();
   histogram_code_memory_use_.Reset();
   histogram_profiling_info_memory_use_.Reset();
+  if (pc_range_cache_ != nullptr) {
+    pc_range_cache_->Clear();
+    pc_range_cache_->ResetStats();
+  }
 
   size_t initial_capacity = runtime->GetJITOptions()->GetCodeCacheInitialCapacity();
   size_t max_capacity = runtime->GetJITOptions()->GetCodeCacheMaxCapacity();

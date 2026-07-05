@@ -53,6 +53,12 @@ JitOptions* JitOptions::CreateFromRuntimeArguments(const RuntimeArgumentMap& opt
       options.GetOrDefault(RuntimeArgumentMap::JITCodeCacheInitialCapacity);
   jit_options->code_cache_max_capacity_ =
       options.GetOrDefault(RuntimeArgumentMap::JITCodeCacheMaxCapacity);
+  jit_options->pc_range_cache_entries_ =
+      options.GetOrDefault(RuntimeArgumentMap::JITPcRangeCacheEntries);
+  if (jit_options->pc_range_cache_entries_ > JitCodeCache::kMaxPcRangeCacheEntries) {
+    LOG(FATAL) << "JIT PC range cache entries exceeds maximum "
+               << JitCodeCache::kMaxPcRangeCacheEntries;
+  }
   jit_options->dump_info_on_shutdown_ =
       options.Exists(RuntimeArgumentMap::DumpJITInfoOnShutdown);
   jit_options->profile_saver_options_ =

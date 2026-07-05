@@ -65,6 +65,10 @@ class JitOptions {
     return code_cache_max_capacity_;
   }
 
+  size_t GetPcRangeCacheEntries() const {
+    return pc_range_cache_entries_;
+  }
+
   bool DumpJitInfoOnShutdown() const {
     return dump_info_on_shutdown_;
   }
@@ -128,6 +132,7 @@ class JitOptions {
   bool use_baseline_compiler_;
   size_t code_cache_initial_capacity_;
   size_t code_cache_max_capacity_;
+  size_t pc_range_cache_entries_;
   uint32_t optimize_threshold_;
   uint32_t warmup_threshold_;
   uint16_t priority_thread_weight_;
@@ -143,6 +148,7 @@ class JitOptions {
         use_baseline_compiler_(false),
         code_cache_initial_capacity_(0),
         code_cache_max_capacity_(0),
+        pc_range_cache_entries_(0),
         optimize_threshold_(0),
         warmup_threshold_(0),
         priority_thread_weight_(0),
