@@ -43,13 +43,13 @@ bool Compiler::IsPathologicalCase(const dex::CodeItem& code_item,
    * of that, which also guarantees we cannot overflow our 16-bit internal Quick SSA name space.
    */
   CodeItemDataAccessor accessor(dex_file, &code_item);
-  if (accessor.InsnsSizeInCodeUnits() >= UINT16_MAX / 4) {
+  if (UNLIKELY(accessor.InsnsSizeInCodeUnits() >= UINT16_MAX / 4)) {
     LOG(INFO) << "Method exceeds compiler instruction limit: "
               << accessor.InsnsSizeInCodeUnits()
               << " in " << dex_file.PrettyMethod(method_idx);
     return true;
   }
-  if (accessor.RegistersSize() >= UINT16_MAX / 4) {
+  if (UNLIKELY(accessor.RegistersSize() >= UINT16_MAX / 4)) {
     LOG(INFO) << "Method exceeds compiler virtual register limit: "
               << accessor.RegistersSize() << " in " << dex_file.PrettyMethod(method_idx);
     return true;
