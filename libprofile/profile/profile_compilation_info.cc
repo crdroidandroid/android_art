@@ -1702,6 +1702,16 @@ ProfileCompilationInfo::ProfileLoadStatus ProfileCompilationInfo::ReadDexFilesSe
       *error = "Error reading dex file data.";
       return ProfileLoadStatus::kBadData;
     }
+    // The profile format supports method indexes only up to `kMaxSupportedMethodIndex`, so a
+    // valid dex record has at most `kMaxSupportedMethodIndex + 1` method ids. Reject oversized
+    // values here, before GetOrAddDexFileData() eagerly sizes (and commits) the method bitmap
+    // to num_method_ids bits per flag -- otherwise a tiny record can force a multi-hundred-MB
+    // to multi-GB allocation (OOM/DoS). num_type_ids is bounded identically for defense in depth.
+    if (num_method_ids > kMaxSupportedMethodIndex + 1u ||
+        num_type_ids > kMaxSupportedMethodIndex + 1u) {
+      *error = "Too many method or type ids in dex file data.";
+      return ProfileLoadStatus::kBadData;
+    }
     std::string_view profile_key_view;
     if (!buffer.ReadStringAndAdvance(&profile_key_view)) {
       *error += "Error reading profile key string.";
